@@ -116,6 +116,123 @@ function canvasEstaEmBranco(canvas) {
   return true;
 }
 
+function encontrarLimitesDesenho(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+
+  const { width, height } = canvas;
+  const { data } = ctx.getImageData(0, 0, width, height);
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      const pixelEhBranco = r === 255 && g === 255 && b === 255 && a === 255;
+
+      if (!pixelEhBranco) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX === -1 || maxY === -1) return null;
+
+  return { minX, minY, maxX, maxY };
+}
+
+function gerarAssinaturaHorizontal(canvasOriginal) {
+  const limites = encontrarLimitesDesenho(canvasOriginal);
+  if (!limites) return "";
+
+  const padding = 28;
+
+  const sx = Math.max(0, limites.minX - padding);
+  const sy = Math.max(0, limites.minY - padding);
+  const sw = Math.min(
+    canvasOriginal.width - sx,
+    limites.maxX - limites.minX + padding * 2
+  );
+  const sh = Math.min(
+    canvasOriginal.height - sy,
+    limites.maxY - limites.minY + padding * 2
+  );
+
+  const canvasRecorte = document.createElement("canvas");
+  canvasRecorte.width = sw;
+  canvasRecorte.height = sh;
+
+  const ctxRecorte = canvasRecorte.getContext("2d");
+  if (!ctxRecorte) return "";
+
+  preencherCanvasBranco(ctxRecorte, sw, sh);
+  ctxRecorte.drawImage(canvasOriginal, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  let canvasBase = canvasRecorte;
+
+  if (sh > sw * 1.05) {
+    const canvasRotacionado = document.createElement("canvas");
+    canvasRotacionado.width = sh;
+    canvasRotacionado.height = sw;
+
+    const ctxRot = canvasRotacionado.getContext("2d");
+    if (!ctxRot) return "";
+
+    preencherCanvasBranco(
+      ctxRot,
+      canvasRotacionado.width,
+      canvasRotacionado.height
+    );
+
+    ctxRot.translate(canvasRotacionado.width / 2, canvasRotacionado.height / 2);
+    ctxRot.rotate(-Math.PI / 2);
+    ctxRot.drawImage(canvasRecorte, -sw / 2, -sh / 2);
+
+    canvasBase = canvasRotacionado;
+  }
+
+  const canvasFinal = document.createElement("canvas");
+  canvasFinal.width = 1400;
+  canvasFinal.height = 420;
+
+  const ctxFinal = canvasFinal.getContext("2d");
+  if (!ctxFinal) return "";
+
+  preencherCanvasBranco(ctxFinal, canvasFinal.width, canvasFinal.height);
+
+  const margemX = 70;
+  const margemY = 45;
+
+  const areaUtilLargura = canvasFinal.width - margemX * 2;
+  const areaUtilAltura = canvasFinal.height - margemY * 2;
+
+  const escala = Math.min(
+    areaUtilLargura / canvasBase.width,
+    areaUtilAltura / canvasBase.height
+  );
+
+  const larguraDesenho = canvasBase.width * escala;
+  const alturaDesenho = canvasBase.height * escala;
+
+  const dx = (canvasFinal.width - larguraDesenho) / 2;
+  const dy = (canvasFinal.height - alturaDesenho) / 2;
+
+  ctxFinal.drawImage(canvasBase, dx, dy, larguraDesenho, alturaDesenho);
+
+  return canvasFinal.toDataURL("image/png");
+}
+
 function ModalEntrega({ onClose, onSalvar }) {
   const [funcionarios, setFuncionarios] = useState([]);
   const [epis, setEpis] = useState([]);
@@ -135,8 +252,12 @@ function ModalEntrega({ onClose, onSalvar }) {
   const [carregando, setCarregando] = useState(false);
 
   const [modalAssinaturaAberto, setModalAssinaturaAberto] = useState(false);
+
   const [assinaturaPreview, setAssinaturaPreview] = useState("");
+  const [assinaturaEdicao, setAssinaturaEdicao] = useState("");
+
   const assinaturaPreviewRef = useRef("");
+  const assinaturaEdicaoRef = useRef("");
 
   const canvasRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -150,6 +271,10 @@ function ModalEntrega({ onClose, onSalvar }) {
   useEffect(() => {
     assinaturaPreviewRef.current = assinaturaPreview;
   }, [assinaturaPreview]);
+
+  useEffect(() => {
+    assinaturaEdicaoRef.current = assinaturaEdicao;
+  }, [assinaturaEdicao]);
 
   useEffect(() => {
     let ativo = true;
@@ -204,14 +329,14 @@ function ModalEntrega({ onClose, onSalvar }) {
       preencherCanvasBranco(ctx, largura, altura);
       contextRef.current = ctx;
 
-      if (assinaturaPreviewRef.current) {
+      if (assinaturaEdicaoRef.current) {
         const imagem = new Image();
         imagem.onload = () => {
           preencherCanvasBranco(ctx, largura, altura);
           ctx.drawImage(imagem, 0, 0, largura, altura);
           aplicarFerramentaNoContexto(ctx, ferramentaAtiva);
         };
-        imagem.src = assinaturaPreviewRef.current;
+        imagem.src = assinaturaEdicaoRef.current;
         setAssinaturaVazia(false);
       } else {
         aplicarFerramentaNoContexto(ctx, ferramentaAtiva);
@@ -335,11 +460,18 @@ function ModalEntrega({ onClose, onSalvar }) {
 
     if (vaziaAgora) {
       setAssinaturaPreview("");
+      setAssinaturaEdicao("");
       assinaturaPreviewRef.current = "";
+      assinaturaEdicaoRef.current = "";
     } else {
-      const imagem = canvas.toDataURL("image/png");
-      setAssinaturaPreview(imagem);
-      assinaturaPreviewRef.current = imagem;
+      const imagemEdicao = canvas.toDataURL("image/png");
+      const imagemHorizontal = gerarAssinaturaHorizontal(canvas);
+
+      setAssinaturaEdicao(imagemEdicao);
+      setAssinaturaPreview(imagemHorizontal);
+
+      assinaturaEdicaoRef.current = imagemEdicao;
+      assinaturaPreviewRef.current = imagemHorizontal;
     }
   }
 
@@ -349,7 +481,9 @@ function ModalEntrega({ onClose, onSalvar }) {
 
     setIsDrawing(false);
     setAssinaturaPreview("");
+    setAssinaturaEdicao("");
     assinaturaPreviewRef.current = "";
+    assinaturaEdicaoRef.current = "";
     setAssinaturaVazia(true);
 
     if (!canvas || !ctx) return;
@@ -784,10 +918,7 @@ function ModalEntrega({ onClose, onSalvar }) {
       {modalAssinaturaAberto && (
         <div className="fixed inset-0 z-[100] bg-white w-screen h-[100dvh] overflow-hidden">
           <div className="absolute inset-0 bg-white">
-            <div
-              ref={canvasWrapperRef}
-              className="absolute inset-0"
-            >
+            <div ref={canvasWrapperRef} className="absolute inset-0">
               <canvas
                 ref={canvasRef}
                 onPointerDown={startDrawing}

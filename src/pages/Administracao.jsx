@@ -66,6 +66,18 @@ const mockTiposProtecaoInicial = [
   { id: 7, nome: "Proteção contra Quedas" },
 ];
 
+const mockUsuariosSistemaInicial = [
+  {
+    id: 1,
+    nome: "Administrador Geral",
+    matricula: "1000001",
+    email: "admin@empresa.com",
+    senha: "123",
+    perfil: "admin",
+    status: "ativo",
+  },
+];
+
 const mockEpisInicial = [
   {
     id: 1,
@@ -130,7 +142,7 @@ async function buscarPrimeiraLista(rotas, fallback = []) {
       const lista = extrairLista(resp, fallback);
       if (Array.isArray(lista)) return lista;
     } catch (erro) {
-      // tenta próxima rota
+      // tenta a próxima rota
     }
   }
   return fallback;
@@ -200,6 +212,18 @@ function normalizarTipoProtecao(item) {
   return {
     id: Number(item?.id ?? 0),
     nome: item?.nome ?? "",
+  };
+}
+
+function normalizarUsuarioSistema(item) {
+  return {
+    id: Number(item?.id ?? Date.now()),
+    nome: item?.nome ?? "",
+    matricula: String(item?.matricula ?? ""),
+    email: item?.email ?? "",
+    senha: item?.senha ?? "",
+    perfil: item?.perfil ?? "colaborador",
+    status: item?.status ?? "ativo",
   };
 }
 
@@ -588,6 +612,7 @@ function Administracao() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [tiposProtecao, setTiposProtecao] = useState([]);
   const [epis, setEpis] = useState([]);
+  const [usuariosSistema, setUsuariosSistema] = useState([]);
 
   const [carregando, setCarregando] = useState(false);
   const [salvandoFuncionario, setSalvandoFuncionario] = useState(false);
@@ -597,6 +622,15 @@ function Administracao() {
     nome_fantasia: "",
     cnpj: "",
     inscricao_estadual: "",
+  });
+
+  const [novoUsuario, setNovoUsuario] = useState({
+    nome: "",
+    matricula: "",
+    email: "",
+    senha: "",
+    perfil: "colaborador",
+    status: "ativo",
   });
 
   const [novoDepto, setNovoDepto] = useState("");
@@ -629,6 +663,7 @@ function Administracao() {
         listaFuncionarios,
         listaTiposProtecao,
         listaEpis,
+        listaUsuariosSistema,
       ] = await Promise.all([
         buscarPrimeiraLista(["/fornecedores"], mockFornecedoresInicial),
         buscarPrimeiraLista(["/departamentos"], mockDepartamentosInicial),
@@ -639,6 +674,10 @@ function Administracao() {
           mockTiposProtecaoInicial
         ),
         buscarPrimeiraLista(["/epis", "/epi", "/produtos"], mockEpisInicial),
+        buscarPrimeiraLista(
+          ["/usuarios-sistema", "/usuarios", "/acessos"],
+          mockUsuariosSistemaInicial
+        ),
       ]);
 
       setFornecedores(listaFornecedores.map(normalizarFornecedor));
@@ -647,6 +686,7 @@ function Administracao() {
       setFuncionarios(listaFuncionarios.map(normalizarFuncionario));
       setTiposProtecao(listaTiposProtecao.map(normalizarTipoProtecao));
       setEpis(listaEpis.map(normalizarEpi));
+      setUsuariosSistema(listaUsuariosSistema.map(normalizarUsuarioSistema));
     } finally {
       setCarregando(false);
     }
@@ -769,24 +809,102 @@ function Administracao() {
     };
 
     try {
-      await api.post("/fornecedor", payload);
-    } catch (erro) {
       try {
-        await api.post("/fornecedores", payload);
-      } catch (erro2) {
-        // fallback local
+        await api.post("/fornecedor", payload);
+      } catch (erro) {
+        try {
+          await api.post("/fornecedores", payload);
+        } catch (erro2) {
+          // fallback local
+        }
       }
+
+      const item = { id: Date.now(), ...payload };
+      setFornecedores((prev) => [item, ...prev]);
+      setNovoForn({
+        razao_social: "",
+        nome_fantasia: "",
+        cnpj: "",
+        inscricao_estadual: "",
+      });
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const adicionarUsuarioSistema = async () => {
+    if (
+      !novoUsuario.nome.trim() ||
+      !novoUsuario.matricula.trim() ||
+      !novoUsuario.email.trim() ||
+      !novoUsuario.senha.trim()
+    ) {
+      alert("Preencha nome, matrícula, e-mail e senha do colaborador.");
+      return;
     }
 
-    const item = { id: Date.now(), ...payload };
-    setFornecedores((prev) => [item, ...prev]);
-    setNovoForn({
-      razao_social: "",
-      nome_fantasia: "",
-      cnpj: "",
-      inscricao_estadual: "",
-    });
-    setCarregando(false);
+    const emailJaExiste = usuariosSistema.some(
+      (u) => u.email.toLowerCase() === novoUsuario.email.toLowerCase()
+    );
+
+    if (emailJaExiste) {
+      alert("Já existe um login cadastrado com esse e-mail.");
+      return;
+    }
+
+    const matriculaJaExiste = usuariosSistema.some(
+      (u) => String(u.matricula) === String(novoUsuario.matricula)
+    );
+
+    if (matriculaJaExiste) {
+      alert("Já existe um login cadastrado com essa matrícula.");
+      return;
+    }
+
+    setCarregando(true);
+
+    const payload = {
+      nome: novoUsuario.nome.trim(),
+      matricula: novoUsuario.matricula.trim(),
+      email: novoUsuario.email.trim(),
+      senha: novoUsuario.senha,
+      perfil: novoUsuario.perfil,
+      status: novoUsuario.status,
+    };
+
+    try {
+      try {
+        await api.post("/usuario-sistema", payload);
+      } catch (erro) {
+        try {
+          await api.post("/usuarios", payload);
+        } catch (erro2) {
+          try {
+            await api.post("/acessos", payload);
+          } catch (erro3) {
+            // fallback local
+          }
+        }
+      }
+
+      const novoRegistro = normalizarUsuarioSistema({
+        id: Date.now(),
+        ...payload,
+      });
+
+      setUsuariosSistema((prev) => [novoRegistro, ...prev]);
+
+      setNovoUsuario({
+        nome: "",
+        matricula: "",
+        email: "",
+        senha: "",
+        perfil: "colaborador",
+        status: "ativo",
+      });
+    } finally {
+      setCarregando(false);
+    }
   };
 
   const adicionarDepartamento = async () => {
@@ -800,19 +918,22 @@ function Administracao() {
     const payload = { nome: novoDepto.trim() };
 
     try {
-      await api.post("/departamento", payload);
-    } catch (erro) {
       try {
-        await api.post("/departamentos", payload);
-      } catch (erro2) {
-        // fallback local
+        await api.post("/departamento", payload);
+      } catch (erro) {
+        try {
+          await api.post("/departamentos", payload);
+        } catch (erro2) {
+          // fallback local
+        }
       }
-    }
 
-    const item = { id: Date.now(), ...payload };
-    setDepartamentos((prev) => [item, ...prev]);
-    setNovoDepto("");
-    setCarregando(false);
+      const item = { id: Date.now(), ...payload };
+      setDepartamentos((prev) => [item, ...prev]);
+      setNovoDepto("");
+    } finally {
+      setCarregando(false);
+    }
   };
 
   const adicionarFuncao = async () => {
@@ -829,23 +950,26 @@ function Administracao() {
     };
 
     try {
-      await api.post("/funcao", payload);
-    } catch (erro) {
       try {
-        await api.post("/funcoes", payload);
-      } catch (erro2) {
+        await api.post("/funcao", payload);
+      } catch (erro) {
         try {
-          await api.post("/cargo", payload);
-        } catch (erro3) {
-          // fallback local
+          await api.post("/funcoes", payload);
+        } catch (erro2) {
+          try {
+            await api.post("/cargo", payload);
+          } catch (erro3) {
+            // fallback local
+          }
         }
       }
-    }
 
-    const item = { id: Date.now(), ...payload };
-    setFuncoes((prev) => [item, ...prev]);
-    setNovaFuncao({ nome: "", idDepartamento: "" });
-    setCarregando(false);
+      const item = { id: Date.now(), ...payload };
+      setFuncoes((prev) => [item, ...prev]);
+      setNovaFuncao({ nome: "", idDepartamento: "" });
+    } finally {
+      setCarregando(false);
+    }
   };
 
   const removerFornecedor = async (id) => {
@@ -862,6 +986,28 @@ function Administracao() {
     }
 
     setFornecedores((prev) =>
+      prev.filter((item) => Number(item.id) !== Number(id))
+    );
+  };
+
+  const removerUsuarioSistema = async (id) => {
+    if (!window.confirm("Tem certeza que deseja remover este acesso?")) return;
+
+    try {
+      await api.delete(`/usuario-sistema/${id}`);
+    } catch (erro) {
+      try {
+        await api.delete(`/usuarios/${id}`);
+      } catch (erro2) {
+        try {
+          await api.delete(`/acessos/${id}`);
+        } catch (erro3) {
+          // fallback local
+        }
+      }
+    }
+
+    setUsuariosSistema((prev) =>
       prev.filter((item) => Number(item.id) !== Number(id))
     );
   };
@@ -954,47 +1100,48 @@ function Administracao() {
       idFuncao: Number(formFuncFuncao),
     };
 
-    if (funcionarioEditando) {
+    try {
+      if (funcionarioEditando) {
+        try {
+          await api.put(`/funcionario/${funcionarioEditando.id}`, payload);
+        } catch (erro) {
+          try {
+            await api.put(`/funcionarios/${funcionarioEditando.id}`, payload);
+          } catch (erro2) {
+            // fallback local
+          }
+        }
+
+        setFuncionarios((prev) =>
+          prev.map((f) =>
+            Number(f.id) === Number(funcionarioEditando.id)
+              ? {
+                  ...f,
+                  ...payload,
+                }
+              : f
+          )
+        );
+
+        fecharModalFuncionario();
+        return;
+      }
+
       try {
-        await api.put(`/funcionario/${funcionarioEditando.id}`, payload);
+        await api.post("/funcionario", payload);
       } catch (erro) {
         try {
-          await api.put(`/funcionarios/${funcionarioEditando.id}`, payload);
+          await api.post("/funcionarios", payload);
         } catch (erro2) {
           // fallback local
         }
       }
 
-      setFuncionarios((prev) =>
-        prev.map((f) =>
-          Number(f.id) === Number(funcionarioEditando.id)
-            ? {
-                ...f,
-                ...payload,
-              }
-            : f
-        )
-      );
-
+      setFuncionarios((prev) => [{ id: Date.now(), ...payload }, ...prev]);
       fecharModalFuncionario();
+    } finally {
       setSalvandoFuncionario(false);
-      return;
     }
-
-    try {
-      await api.post("/funcionario", payload);
-    } catch (erro) {
-      try {
-        await api.post("/funcionarios", payload);
-      } catch (erro2) {
-        // fallback local
-      }
-    }
-
-    setFuncionarios((prev) => [{ id: Date.now(), ...payload }, ...prev]);
-
-    fecharModalFuncionario();
-    setSalvandoFuncionario(false);
   };
 
   const excluirFuncionario = async (id) => {
@@ -1157,8 +1304,8 @@ function Administracao() {
         </div>
 
         {abaAtiva === "fornecedores" && (
-          <div className="animate-fade-in">
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
               <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">
                 Novo Fornecedor
               </h3>
@@ -1199,7 +1346,9 @@ function Administracao() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block">CNPJ</label>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    CNPJ
+                  </label>
                   <input
                     className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm"
                     value={novoForn.cnpj}
@@ -1237,58 +1386,396 @@ function Administracao() {
                   disabled={carregando}
                   className="w-full md:w-auto bg-emerald-600 text-white font-bold py-2 px-5 rounded hover:bg-emerald-700 transition text-sm"
                 >
-                  {carregando ? "..." : "+ Cadastrar"}
+                  {carregando ? "..." : "+ Cadastrar fornecedor"}
                 </button>
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
-                  <tr>
-                    <th className="p-3">Razão Social</th>
-                    <th className="p-3">Nome Fantasia</th>
-                    <th className="p-3">CNPJ</th>
-                    <th className="p-3">Inscrição Estadual</th>
-                    <th className="p-3 text-center">Ação</th>
-                  </tr>
-                </thead>
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3 className="text-xs font-bold text-slate-500 uppercase">
+                  Fornecedores cadastrados
+                </h3>
+                <span className="text-xs text-slate-400">
+                  {fornecedores.length} registro(s)
+                </span>
+              </div>
 
-                <tbody className="divide-y divide-slate-100">
-                  {fornecedores.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="p-4 text-center text-gray-400 italic">
-                        Nenhum fornecedor registrado.
-                      </td>
-                    </tr>
-                  ) : (
-                    fornecedores.map((f) => (
-                      <tr key={f.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-medium text-slate-800">
-                          {f.razao_social || "-"}
-                        </td>
-                        <td className="p-3 text-slate-600">
-                          {f.nome_fantasia || "-"}
-                        </td>
-                        <td className="p-3 text-slate-500 font-mono text-xs">
-                          {f.cnpj || "-"}
-                        </td>
-                        <td className="p-3 text-slate-600">
-                          {f.inscricao_estadual || "-"}
-                        </td>
-                        <td className="p-3 text-center">
+              {fornecedores.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-gray-400 italic">
+                  Nenhum fornecedor registrado.
+                </div>
+              ) : (
+                <>
+                  <div className="md:hidden space-y-3">
+                    {fornecedores.map((f) => (
+                      <div
+                        key={f.id}
+                        className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                      >
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              Razão Social
+                            </span>
+                            <span className="text-slate-800 font-medium">
+                              {f.razao_social || "-"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              Nome Fantasia
+                            </span>
+                            <span className="text-slate-600">
+                              {f.nome_fantasia || "-"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              CNPJ
+                            </span>
+                            <span className="text-slate-500 font-mono text-xs">
+                              {f.cnpj || "-"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              Inscrição Estadual
+                            </span>
+                            <span className="text-slate-600">
+                              {f.inscricao_estadual || "-"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100">
                           <button
                             onClick={() => removerFornecedor(f.id)}
-                            className="text-red-500 hover:text-red-700 font-bold text-xs underline"
+                            className="w-full py-2 rounded-lg border border-red-200 text-red-600 font-bold text-sm hover:bg-red-50 transition"
                           >
                             Excluir
                           </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
+                        <tr>
+                          <th className="p-3">Razão Social</th>
+                          <th className="p-3">Nome Fantasia</th>
+                          <th className="p-3">CNPJ</th>
+                          <th className="p-3">Inscrição Estadual</th>
+                          <th className="p-3 text-center">Ação</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-100">
+                        {fornecedores.map((f) => (
+                          <tr key={f.id} className="hover:bg-slate-50">
+                            <td className="p-3 font-medium text-slate-800">
+                              {f.razao_social || "-"}
+                            </td>
+                            <td className="p-3 text-slate-600">
+                              {f.nome_fantasia || "-"}
+                            </td>
+                            <td className="p-3 text-slate-500 font-mono text-xs">
+                              {f.cnpj || "-"}
+                            </td>
+                            <td className="p-3 text-slate-600">
+                              {f.inscricao_estadual || "-"}
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => removerFornecedor(f.id)}
+                                className="text-red-500 hover:text-red-700 font-bold text-xs underline"
+                              >
+                                Excluir
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">
+                Login de Colaboradores
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Nome
+                  </label>
+                  <input
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm"
+                    value={novoUsuario.nome}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        nome: e.target.value,
+                      }))
+                    }
+                    placeholder="Ex: João Silva"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Matrícula
+                  </label>
+                  <input
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm"
+                    value={novoUsuario.matricula}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        matricula: e.target.value,
+                      }))
+                    }
+                    placeholder="Ex: 483920"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm"
+                    value={novoUsuario.email}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
+                    placeholder="colaborador@empresa.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Senha
+                  </label>
+                  <input
+                    type="password"
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm"
+                    value={novoUsuario.senha}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        senha: e.target.value,
+                      }))
+                    }
+                    placeholder="Digite uma senha"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Perfil
+                  </label>
+                  <select
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm bg-white"
+                    value={novoUsuario.perfil}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        perfil: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="colaborador">Colaborador</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Status
+                  </label>
+                  <select
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-slate-500 outline-none text-sm bg-white"
+                    value={novoUsuario.status}
+                    onChange={(e) =>
+                      setNovoUsuario((prev) => ({
+                        ...prev,
+                        status: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="ativo">Ativo</option>
+                    <option value="inativo">Inativo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <button
+                  onClick={adicionarUsuarioSistema}
+                  disabled={carregando}
+                  className="w-full md:w-auto bg-slate-800 text-white font-bold py-2 px-5 rounded hover:bg-slate-900 transition text-sm"
+                >
+                  {carregando ? "..." : "+ Adicionar login"}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3 className="text-xs font-bold text-slate-500 uppercase">
+                  Colaboradores com acesso
+                </h3>
+                <span className="text-xs text-slate-400">
+                  {usuariosSistema.length} registro(s)
+                </span>
+              </div>
+
+              {usuariosSistema.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-gray-400 italic">
+                  Nenhum login cadastrado.
+                </div>
+              ) : (
+                <>
+                  <div className="md:hidden space-y-3">
+                    {usuariosSistema.map((u) => (
+                      <div
+                        key={u.id}
+                        className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                      >
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              Nome
+                            </span>
+                            <span className="text-slate-800 font-medium">
+                              {u.nome || "-"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              Matrícula
+                            </span>
+                            <span className="text-slate-600">
+                              {u.matricula || "-"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] uppercase font-bold text-slate-400">
+                              E-mail
+                            </span>
+                            <span className="text-slate-600 break-all">
+                              {u.email || "-"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <span className="block text-[11px] uppercase font-bold text-slate-400">
+                                Perfil
+                              </span>
+                              <span className="text-slate-600">
+                                {u.perfil || "-"}
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="block text-[11px] uppercase font-bold text-slate-400">
+                                Status
+                              </span>
+                              <span
+                                className={`inline-flex px-2 py-1 rounded-full text-[11px] font-bold ${
+                                  u.status === "ativo"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-slate-200 text-slate-600"
+                                }`}
+                              >
+                                {u.status || "-"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100">
+                          <button
+                            onClick={() => removerUsuarioSistema(u.id)}
+                            className="w-full py-2 rounded-lg border border-red-200 text-red-600 font-bold text-sm hover:bg-red-50 transition"
+                          >
+                            Remover acesso
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
+                        <tr>
+                          <th className="p-3">Nome</th>
+                          <th className="p-3">Matrícula</th>
+                          <th className="p-3">E-mail</th>
+                          <th className="p-3">Perfil</th>
+                          <th className="p-3">Status</th>
+                          <th className="p-3 text-center">Ação</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-100">
+                        {usuariosSistema.map((u) => (
+                          <tr key={u.id} className="hover:bg-slate-50">
+                            <td className="p-3 font-medium text-slate-800">
+                              {u.nome || "-"}
+                            </td>
+                            <td className="p-3 text-slate-600">
+                              {u.matricula || "-"}
+                            </td>
+                            <td className="p-3 text-slate-600">
+                              {u.email || "-"}
+                            </td>
+                            <td className="p-3 text-slate-600">
+                              {u.perfil || "-"}
+                            </td>
+                            <td className="p-3">
+                              <span
+                                className={`inline-flex px-2 py-1 rounded-full text-[11px] font-bold ${
+                                  u.status === "ativo"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-slate-200 text-slate-600"
+                                }`}
+                              >
+                                {u.status || "-"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => removerUsuarioSistema(u.id)}
+                                className="text-red-500 hover:text-red-700 font-bold text-xs underline"
+                              >
+                                Remover
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1412,7 +1899,9 @@ function Administracao() {
                 <tbody className="divide-y divide-slate-100">
                   {funcoes.map((f) => (
                     <tr key={f.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-medium text-slate-800">{f.nome}</td>
+                      <td className="p-3 font-medium text-slate-800">
+                        {f.nome}
+                      </td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                           {getDepartamentoNome(f.idDepartamento)}
@@ -1452,7 +1941,10 @@ function Administracao() {
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="text-sm text-slate-500 flex items-center">
-                    Total: <b className="text-slate-800 ml-1">{funcionariosFiltrados.length}</b>
+                    Total:
+                    <b className="text-slate-800 ml-1">
+                      {funcionariosFiltrados.length}
+                    </b>
                   </div>
 
                   <button
@@ -1480,7 +1972,10 @@ function Administracao() {
                 <tbody className="divide-y divide-slate-100">
                   {funcionariosFiltrados.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="p-4 text-center text-gray-400 italic">
+                      <td
+                        colSpan="5"
+                        className="p-4 text-center text-gray-400 italic"
+                      >
                         Nenhum funcionário encontrado.
                       </td>
                     </tr>
@@ -1531,7 +2026,10 @@ function Administracao() {
                 </div>
               ) : (
                 funcionariosFiltrados.map((f) => (
-                  <div key={f.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div
+                    key={f.id}
+                    className="border rounded-lg p-4 bg-white shadow-sm"
+                  >
                     <div>
                       <h3 className="font-bold text-slate-800">{f.nome}</h3>
                       <p className="text-xs text-slate-500 font-mono mt-1">
@@ -1591,7 +2089,8 @@ function Administracao() {
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="text-sm text-slate-500 flex items-center">
-                    Total: <b className="text-slate-800 ml-1">{episFiltrados.length}</b>
+                    Total:
+                    <b className="text-slate-800 ml-1">{episFiltrados.length}</b>
                   </div>
 
                   <button
@@ -1621,7 +2120,10 @@ function Administracao() {
                 <tbody className="divide-y divide-slate-100">
                   {episFiltrados.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="p-4 text-center text-gray-400 italic">
+                      <td
+                        colSpan="7"
+                        className="p-4 text-center text-gray-400 italic"
+                      >
                         Nenhum EPI encontrado.
                       </td>
                     </tr>
@@ -1629,7 +2131,9 @@ function Administracao() {
                     episFiltrados.map((epi) => (
                       <tr key={epi.id} className="hover:bg-slate-50">
                         <td className="p-3">
-                          <div className="font-medium text-slate-800">{epi.nome}</div>
+                          <div className="font-medium text-slate-800">
+                            {epi.nome}
+                          </div>
                           <div className="text-xs text-slate-400 mt-1">
                             {epi.descricao || "Sem descrição"}
                           </div>
@@ -1649,7 +2153,9 @@ function Administracao() {
                                 </span>
                               ))
                             ) : (
-                              <span className="text-slate-400">Sem tamanhos</span>
+                              <span className="text-slate-400">
+                                Sem tamanhos
+                              </span>
                             )}
                           </div>
                         </td>
@@ -1679,7 +2185,10 @@ function Administracao() {
                 </div>
               ) : (
                 episFiltrados.map((epi) => (
-                  <div key={epi.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div
+                    key={epi.id}
+                    className="border rounded-lg p-4 bg-white shadow-sm"
+                  >
                     <div className="flex justify-between gap-3">
                       <div>
                         <h3 className="font-bold text-slate-800">{epi.nome}</h3>
@@ -1788,7 +2297,9 @@ function Administracao() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs text-slate-500 mb-1 block">Função</label>
+                <label className="text-xs text-slate-500 mb-1 block">
+                  Função
+                </label>
                 <select
                   className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-slate-500 outline-none text-sm bg-white disabled:bg-slate-50"
                   value={formFuncFuncao}

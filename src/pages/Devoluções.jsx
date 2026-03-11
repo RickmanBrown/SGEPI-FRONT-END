@@ -233,6 +233,297 @@ function normalizarDevolucao(item) {
   };
 }
 
+function pad2(valor) {
+  return String(valor).padStart(2, "0");
+}
+
+function dataLocalParaISO(data) {
+  if (!data) return "";
+  return `${data.getFullYear()}-${pad2(data.getMonth() + 1)}-${pad2(
+    data.getDate()
+  )}`;
+}
+
+function obterHojeISO() {
+  return dataLocalParaISO(new Date());
+}
+
+function obterPrimeiroDiaMesISO() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${pad2(hoje.getMonth() + 1)}-01`;
+}
+
+function obterPrimeiroDiaAnoISO() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-01-01`;
+}
+
+function obterDataMenosDiasISO(dias) {
+  const data = new Date();
+  data.setDate(data.getDate() - dias);
+  return dataLocalParaISO(data);
+}
+
+function formatarData(data) {
+  if (!data) return "--";
+
+  const texto = String(data).substring(0, 10);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const [ano, mes, dia] = texto.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  const dataObj = new Date(data);
+  if (Number.isNaN(dataObj.getTime())) return "--";
+
+  return dataObj.toLocaleDateString("pt-BR");
+}
+
+function obterTextoPeriodo(inicio, fim) {
+  if (inicio && fim) return `${formatarData(inicio)} até ${formatarData(fim)}`;
+  if (inicio && !fim) return `A partir de ${formatarData(inicio)}`;
+  if (!inicio && fim) return `Até ${formatarData(fim)}`;
+  return "Período completo (todos os registros)";
+}
+
+function escapeHtml(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function filtrarPorPeriodo(lista, inicio, fim) {
+  return lista.filter((item) => {
+    const data = String(item?.data_devolucao || "").substring(0, 10);
+
+    if (!data) return !inicio && !fim;
+    if (inicio && data < inicio) return false;
+    if (fim && data > fim) return false;
+
+    return true;
+  });
+}
+
+function abrirJanelaImpressao(html) {
+  const win = window.open("", "", "width=1100,height=750");
+
+  if (!win) {
+    window.alert(
+      "Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-up."
+    );
+    return;
+  }
+
+  win.document.write(html);
+  win.document.close();
+}
+
+function ModalPeriodoRelatorioDevolucao({
+  aberto,
+  tipo,
+  funcionario,
+  inicio,
+  fim,
+  erro,
+  resumo,
+  onClose,
+  onChangeInicio,
+  onChangeFim,
+  onConfirmar,
+  onLimpar,
+  onAplicarAtalho,
+}) {
+  if (!aberto) return null;
+
+  const titulo =
+    tipo === "funcionario"
+      ? "Selecionar período do funcionário"
+      : "Selecionar período geral";
+
+  const subtitulo =
+    tipo === "funcionario"
+      ? `Escolha o intervalo de devoluções para ${funcionario?.nome || "o funcionário"}`
+      : "Escolha o intervalo para imprimir o relatório geral de devoluções";
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fade-in">
+        <div className="bg-gradient-to-r from-red-700 to-rose-700 text-white px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold">{titulo}</h3>
+              <p className="text-sm text-red-100 mt-1">{subtitulo}</p>
+
+              {tipo === "funcionario" && funcionario && (
+                <div className="mt-3 inline-flex items-center gap-2 bg-white/10 border border-white/15 rounded-lg px-3 py-2">
+                  <span className="text-sm font-semibold">{funcionario.nome}</span>
+                  <span className="text-xs text-red-100">
+                    Matrícula: {funcionario.matricula || "--"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-white/10 hover:bg-white/20 transition rounded-lg px-3 py-2 text-sm font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-5">
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-500 block mb-3">
+              Atalhos rápidos
+            </span>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onAplicarAtalho({ inicio: "", fim: "" })}
+                className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+              >
+                Todo o período
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterPrimeiroDiaMesISO(),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
+              >
+                Mês atual
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterDataMenosDiasISO(30),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
+              >
+                Últimos 30 dias
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterPrimeiroDiaAnoISO(),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
+              >
+                Ano atual
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                Data inicial
+              </label>
+              <input
+                type="date"
+                value={inicio}
+                onChange={(e) => onChangeInicio(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                Data final
+              </label>
+              <input
+                type="date"
+                value={fim}
+                onChange={(e) => onChangeFim(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
+              />
+            </div>
+          </div>
+
+          {erro ? (
+            <div className="mt-4 bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-sm">
+              {erro}
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Período selecionado
+              </span>
+              <strong className="text-sm text-gray-800">
+                {obterTextoPeriodo(inicio, fim)}
+              </strong>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Devoluções encontradas
+              </span>
+              <strong className="text-2xl text-red-700">{resumo.totalDevolucoes}</strong>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Trocas no período
+              </span>
+              <strong className="text-2xl text-emerald-700">{resumo.totalTrocas}</strong>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3">
+            <button
+              type="button"
+              onClick={onLimpar}
+              className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition"
+            >
+              Limpar datas
+            </button>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={onConfirmar}
+                className="px-5 py-3 rounded-xl bg-red-700 text-white font-bold hover:bg-red-800 transition shadow-sm"
+              >
+                🖨️ Gerar relatório
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Devolucoes() {
   const [devolucoes, setDevolucoes] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -241,8 +532,18 @@ function Devolucoes() {
   const [motivos, setMotivos] = useState([]);
 
   const [modalAberto, setModalAberto] = useState(false);
+
   const [busca, setBusca] = useState("");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
   const [paginaAtual, setPaginaAtual] = useState(1);
+
+  const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
+  const [tipoRelatorioModal, setTipoRelatorioModal] = useState("geral");
+  const [funcionarioSelecionado, setFuncionarioSelecionado] = useState(null);
+  const [periodoRelatorioInicio, setPeriodoRelatorioInicio] = useState("");
+  const [periodoRelatorioFim, setPeriodoRelatorioFim] = useState("");
+  const [erroPeriodoModal, setErroPeriodoModal] = useState("");
 
   const itensPorPagina = 5;
 
@@ -283,11 +584,9 @@ function Devolucoes() {
     carregarDevolucoes();
   }, []);
 
-  const formatarData = (data) => {
-    if (!data) return "--";
-    const dataObj = new Date(data);
-    if (Number.isNaN(dataObj.getTime())) return "--";
-    return dataObj.toLocaleDateString("pt-BR");
+  const aoMudarFiltro = (setter, valor) => {
+    setter(valor);
+    setPaginaAtual(1);
   };
 
   const devolucoesResolvidas = useMemo(() => {
@@ -320,7 +619,8 @@ function Devolucoes() {
         funcionarioMatricula: funcionario?.matricula || "--",
         epiNome: epi?.nome || "EPI não identificado",
         tamanhoNome: tamanho?.tamanho || d.tamanhoTextoFallback || "-",
-        motivoNome: motivo?.nome || d.motivoTextoFallback || "Motivo não identificado",
+        motivoNome:
+          motivo?.nome || d.motivoTextoFallback || "Motivo não identificado",
         houveTroca,
         epiNovoNome: epiNovo?.nome || (houveTroca ? "EPI de troca" : null),
         tamanhoNovoNome:
@@ -332,20 +632,26 @@ function Devolucoes() {
   const devolucoesFiltradas = useMemo(() => {
     const termo = busca.toLowerCase().trim();
 
-    if (!termo) return devolucoesResolvidas;
-
     return devolucoesResolvidas.filter((d) => {
-      return (
+      const matchTexto =
+        !termo ||
         (d.funcionarioNome || "").toLowerCase().includes(termo) ||
         String(d.funcionarioMatricula || "").includes(termo) ||
         (d.motivoNome || "").toLowerCase().includes(termo) ||
         (d.epiNome || "").toLowerCase().includes(termo) ||
         (d.epiNovoNome || "").toLowerCase().includes(termo) ||
         String(d.tamanhoNome || "").toLowerCase().includes(termo) ||
-        String(d.tamanhoNovoNome || "").toLowerCase().includes(termo)
-      );
+        String(d.tamanhoNovoNome || "").toLowerCase().includes(termo);
+
+      let matchData = true;
+      const data = String(d.data_devolucao || "").substring(0, 10);
+
+      if (dataInicio) matchData = matchData && data >= dataInicio;
+      if (dataFim) matchData = matchData && data <= dataFim;
+
+      return matchTexto && matchData;
     });
-  }, [devolucoesResolvidas, busca]);
+  }, [devolucoesResolvidas, busca, dataInicio, dataFim]);
 
   const devolucoesOrdenadas = useMemo(() => {
     return [...devolucoesFiltradas].sort((a, b) => {
@@ -362,8 +668,549 @@ function Devolucoes() {
 
   const indexUltimoItem = paginaAtual * itensPorPagina;
   const indexPrimeiroItem = indexUltimoItem - itensPorPagina;
-  const devolucoesVisiveis = devolucoesOrdenadas.slice(indexPrimeiroItem, indexUltimoItem);
-  const totalPaginas = Math.max(1, Math.ceil(devolucoesOrdenadas.length / itensPorPagina));
+  const devolucoesVisiveis = devolucoesOrdenadas.slice(
+    indexPrimeiroItem,
+    indexUltimoItem
+  );
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(devolucoesOrdenadas.length / itensPorPagina)
+  );
+
+  const baseDoModalPeriodo = useMemo(() => {
+    if (tipoRelatorioModal === "funcionario" && funcionarioSelecionado) {
+      return devolucoesResolvidas
+        .filter(
+          (item) =>
+            Number(item.idFuncionario) === Number(funcionarioSelecionado.id)
+        )
+        .sort((a, b) => {
+          if (a.data_devolucao < b.data_devolucao) return 1;
+          if (a.data_devolucao > b.data_devolucao) return -1;
+          return 0;
+        });
+    }
+
+    return [...devolucoesResolvidas].sort((a, b) => {
+      if (a.data_devolucao < b.data_devolucao) return 1;
+      if (a.data_devolucao > b.data_devolucao) return -1;
+      return 0;
+    });
+  }, [tipoRelatorioModal, funcionarioSelecionado, devolucoesResolvidas]);
+
+  const resumoModalPeriodo = useMemo(() => {
+    const lista = filtrarPorPeriodo(
+      baseDoModalPeriodo,
+      periodoRelatorioInicio,
+      periodoRelatorioFim
+    );
+
+    return {
+      totalDevolucoes: lista.length,
+      totalTrocas: lista.filter((item) => item.houveTroca).length,
+    };
+  }, [baseDoModalPeriodo, periodoRelatorioInicio, periodoRelatorioFim]);
+
+  const resetarModalPeriodo = () => {
+    setModalPeriodoAberto(false);
+    setTipoRelatorioModal("geral");
+    setFuncionarioSelecionado(null);
+    setPeriodoRelatorioInicio("");
+    setPeriodoRelatorioFim("");
+    setErroPeriodoModal("");
+  };
+
+  const abrirModalRelatorioGeral = () => {
+    setTipoRelatorioModal("geral");
+    setFuncionarioSelecionado(null);
+    setPeriodoRelatorioInicio(dataInicio || "");
+    setPeriodoRelatorioFim(dataFim || "");
+    setErroPeriodoModal("");
+    setModalPeriodoAberto(true);
+  };
+
+  const abrirModalRelatorioFuncionario = (funcionario) => {
+    setTipoRelatorioModal("funcionario");
+    setFuncionarioSelecionado(funcionario || null);
+    setPeriodoRelatorioInicio(dataInicio || "");
+    setPeriodoRelatorioFim(dataFim || "");
+    setErroPeriodoModal("");
+    setModalPeriodoAberto(true);
+  };
+
+  const gerarHtmlRelatorioDevolucoes = ({
+    tipo = "geral",
+    funcionario = null,
+    registros = [],
+    inicio = "",
+    fim = "",
+  }) => {
+    const periodoTexto = obterTextoPeriodo(inicio, fim);
+    const dataEmissao = new Date().toLocaleDateString("pt-BR");
+    const horaEmissao = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const totalDevolucoes = registros.length;
+    const totalTrocas = registros.filter((item) => item.houveTroca).length;
+    const totalSemTroca = totalDevolucoes - totalTrocas;
+
+    const tituloPrincipal =
+      tipo === "funcionario"
+        ? "Histórico Individual de Devoluções"
+        : "Relatório Geral de Devoluções de EPI";
+
+    const subtituloPrincipal =
+      tipo === "funcionario"
+        ? `${funcionario?.nome || "Funcionário não identificado"} • Matrícula ${
+            funcionario?.matricula || "--"
+          }`
+        : "Todos os funcionários";
+
+    const linhasTabela =
+      registros.length > 0
+        ? registros
+            .map((d) => {
+              const funcionarioNome = escapeHtml(d.funcionarioNome || "Não identificado");
+              const matricula = escapeHtml(d.funcionarioMatricula || "--");
+              const epiNome = escapeHtml(d.epiNome || "EPI não identificado");
+              const tamanhoNome = escapeHtml(d.tamanhoNome || "-");
+              const motivoNome = escapeHtml(d.motivoNome || "Motivo não identificado");
+              const quantidade = Number(d.quantidadeADevolver || 0);
+
+              const trocaHtml = d.houveTroca
+                ? `<div class="troca-box">
+                    <span class="tag tag-ok">Houve troca</span>
+                    <div class="troca-detalhe">
+                      Novo item: <strong>${escapeHtml(
+                        d.epiNovoNome || "EPI de troca"
+                      )}</strong> (${escapeHtml(
+                    d.tamanhoNovoNome || "-"
+                  )}) • Quantidade: <strong>${Number(d.quantidadeNova || 0)}</strong>
+                    </div>
+                  </div>`
+                : `<span class="tag tag-muted">Sem troca</span>`;
+
+              const assinaturaHtml =
+                d.assinatura_digital || d.token_validacao
+                  ? `<span class="tag tag-ok">Registrada digitalmente</span>`
+                  : `<div class="assinatura-vazia"></div><span class="assinatura-legenda">Assinatura física</span>`;
+
+              return `
+                <tr>
+                  <td class="col-data">${formatarData(d.data_devolucao)}</td>
+                  <td class="col-funcionario">
+                    <div class="funcionario-nome">${funcionarioNome}</div>
+                    <div class="funcionario-meta">Matrícula: ${matricula}</div>
+                  </td>
+                  <td class="col-item">
+                    <div class="item-principal">${epiNome} (${tamanhoNome})</div>
+                    <div class="item-sub">Quantidade devolvida: <strong>${quantidade}</strong></div>
+                  </td>
+                  <td class="col-motivo">${motivoNome}</td>
+                  <td class="col-troca">${trocaHtml}</td>
+                  <td class="col-assinatura">${assinaturaHtml}</td>
+                </tr>
+              `;
+            })
+            .join("")
+        : `
+          <tr>
+            <td colspan="6" class="sem-registros">
+              Nenhum registro encontrado para o período selecionado.
+            </td>
+          </tr>
+        `;
+
+    return `
+      <html>
+        <head>
+          <title>${escapeHtml(tituloPrincipal)}</title>
+          <meta charset="utf-8" />
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&display=swap');
+
+            * {
+              box-sizing: border-box;
+            }
+
+            body {
+              font-family: 'Roboto', sans-serif;
+              margin: 0;
+              padding: 32px;
+              color: #1f2937;
+              background: #ffffff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            .topbar {
+              border: 1px solid #fecaca;
+              background: linear-gradient(135deg, #fff1f2 0%, #ffffff 100%);
+              border-radius: 18px;
+              padding: 22px 24px;
+              margin-bottom: 24px;
+            }
+
+            .topbar-grid {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 24px;
+            }
+
+            .topbar h1 {
+              margin: 0;
+              font-size: 24px;
+              color: #b91c1c;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.02em;
+            }
+
+            .topbar p {
+              margin: 8px 0 0;
+              color: #475569;
+              font-size: 13px;
+            }
+
+            .meta-box {
+              min-width: 260px;
+              border: 1px solid #fecaca;
+              background: #ffffff;
+              border-radius: 14px;
+              padding: 14px 16px;
+            }
+
+            .meta-row {
+              font-size: 12px;
+              color: #334155;
+              line-height: 1.6;
+              margin-bottom: 2px;
+            }
+
+            .cards {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+
+            .card {
+              border: 1px solid #e5e7eb;
+              border-radius: 14px;
+              padding: 16px;
+              background: #f8fafc;
+            }
+
+            .card .label {
+              display: block;
+              font-size: 11px;
+              color: #64748b;
+              text-transform: uppercase;
+              font-weight: 700;
+              margin-bottom: 6px;
+            }
+
+            .card .value {
+              font-size: 24px;
+              font-weight: 800;
+              color: #0f172a;
+            }
+
+            .section-title {
+              font-size: 13px;
+              font-weight: 800;
+              color: #475569;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin: 0 0 10px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              overflow: hidden;
+              border-radius: 16px;
+              border: 1px solid #e5e7eb;
+            }
+
+            thead th {
+              text-align: left;
+              padding: 12px 14px;
+              background: #7f1d1d;
+              color: #ffffff;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+
+            tbody td {
+              padding: 14px;
+              border-bottom: 1px solid #e5e7eb;
+              vertical-align: top;
+              font-size: 12px;
+            }
+
+            tbody tr:nth-child(even) {
+              background: #fafafa;
+            }
+
+            .col-data {
+              width: 10%;
+              white-space: nowrap;
+              font-weight: 700;
+              color: #334155;
+            }
+
+            .col-funcionario {
+              width: 20%;
+            }
+
+            .col-item {
+              width: 22%;
+            }
+
+            .col-motivo {
+              width: 18%;
+            }
+
+            .col-troca {
+              width: 20%;
+            }
+
+            .col-assinatura {
+              width: 10%;
+              text-align: center;
+            }
+
+            .funcionario-nome {
+              font-size: 13px;
+              font-weight: 800;
+              color: #111827;
+              margin-bottom: 4px;
+            }
+
+            .funcionario-meta {
+              font-size: 11px;
+              color: #6b7280;
+            }
+
+            .item-principal {
+              font-size: 12px;
+              font-weight: 700;
+              color: #111827;
+              margin-bottom: 4px;
+            }
+
+            .item-sub {
+              font-size: 11px;
+              color: #6b7280;
+            }
+
+            .tag {
+              display: inline-block;
+              padding: 6px 10px;
+              border-radius: 999px;
+              font-size: 11px;
+              font-weight: 700;
+            }
+
+            .tag-ok {
+              color: #166534;
+              background: #dcfce7;
+              border: 1px solid #bbf7d0;
+            }
+
+            .tag-muted {
+              color: #475569;
+              background: #f1f5f9;
+              border: 1px solid #cbd5e1;
+            }
+
+            .troca-box {
+              display: block;
+            }
+
+            .troca-detalhe {
+              margin-top: 8px;
+              font-size: 11px;
+              color: #334155;
+              line-height: 1.5;
+            }
+
+            .assinatura-vazia {
+              width: 80%;
+              margin: 10px auto 6px;
+              border-bottom: 1px solid #94a3b8;
+              min-height: 20px;
+            }
+
+            .assinatura-legenda {
+              font-size: 10px;
+              color: #6b7280;
+              font-style: italic;
+            }
+
+            .sem-registros {
+              text-align: center;
+              color: #6b7280;
+              padding: 24px;
+              font-style: italic;
+            }
+
+            .footer {
+              margin-top: 28px;
+              display: flex;
+              justify-content: space-between;
+              gap: 20px;
+            }
+
+            .assinatura-box {
+              width: 48%;
+              padding-top: 42px;
+              border-top: 1px solid #334155;
+              text-align: center;
+              font-size: 11px;
+              color: #475569;
+            }
+
+            .obs {
+              margin-top: 24px;
+              padding: 14px 16px;
+              border-radius: 12px;
+              background: #f8fafc;
+              border: 1px solid #e5e7eb;
+              color: #475569;
+              font-size: 10px;
+              line-height: 1.55;
+            }
+
+            @media print {
+              body {
+                padding: 18px;
+              }
+
+              .topbar {
+                break-inside: avoid;
+              }
+
+              table, tr, td, th {
+                break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="topbar">
+            <div class="topbar-grid">
+              <div>
+                <h1>${escapeHtml(tituloPrincipal)}</h1>
+                <p>${escapeHtml(subtituloPrincipal)}</p>
+              </div>
+
+              <div class="meta-box">
+                <div class="meta-row"><strong>Período:</strong> ${escapeHtml(periodoTexto)}</div>
+                <div class="meta-row"><strong>Emissão:</strong> ${escapeHtml(dataEmissao)}</div>
+                <div class="meta-row"><strong>Hora:</strong> ${escapeHtml(horaEmissao)}</div>
+                <div class="meta-row"><strong>Tipo:</strong> ${
+                  tipo === "funcionario" ? "Relatório individual" : "Relatório geral"
+                }</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <span class="label">Devoluções</span>
+              <span class="value">${totalDevolucoes}</span>
+            </div>
+
+            <div class="card">
+              <span class="label">Com troca</span>
+              <span class="value">${totalTrocas}</span>
+            </div>
+
+            <div class="card">
+              <span class="label">Sem troca</span>
+              <span class="value">${totalSemTroca}</span>
+            </div>
+          </div>
+
+          <h2 class="section-title">Detalhamento das devoluções</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Colaborador</th>
+                <th>Item devolvido</th>
+                <th>Motivo</th>
+                <th>Troca</th>
+                <th>Assinatura</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhasTabela}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div class="assinatura-box">
+              Responsável pelo Almoxarifado
+            </div>
+            <div class="assinatura-box">
+              Técnico de Segurança do Trabalho
+            </div>
+          </div>
+
+          <div class="obs">
+            Declaro, para os devidos fins, que o presente relatório representa o histórico de devoluções e trocas de EPIs conforme os registros lançados no sistema. Recomenda-se a conferência periódica dos dados e das assinaturas em conformidade com a NR-06 e com as rotinas internas da empresa.
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  };
+
+  const confirmarGeracaoRelatorio = () => {
+    if (
+      periodoRelatorioInicio &&
+      periodoRelatorioFim &&
+      periodoRelatorioInicio > periodoRelatorioFim
+    ) {
+      setErroPeriodoModal("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+
+    const filtradas = filtrarPorPeriodo(
+      baseDoModalPeriodo,
+      periodoRelatorioInicio,
+      periodoRelatorioFim
+    );
+
+    if (filtradas.length === 0) {
+      window.alert("Nenhuma devolução foi encontrada para o período selecionado.");
+      return;
+    }
+
+    const html = gerarHtmlRelatorioDevolucoes({
+      tipo: tipoRelatorioModal,
+      funcionario: funcionarioSelecionado,
+      registros: filtradas,
+      inicio: periodoRelatorioInicio,
+      fim: periodoRelatorioFim,
+    });
+
+    abrirJanelaImpressao(html);
+    resetarModalPeriodo();
+  };
 
   const receberNovaDevolucao = async (novaDevolucao) => {
     const payload = {
@@ -393,21 +1240,16 @@ function Devolucoes() {
           novaDevolucao?.quantidade ??
           0
       ),
-      idEpiNovo: Number(
-        novaDevolucao?.idEpiNovo ??
-          novaDevolucao?.troca?.novoEpi ??
-          0
-      ) || null,
-      idTamanhoNovo: Number(
-        novaDevolucao?.idTamanhoNovo ??
-          novaDevolucao?.tamanhoNovoId ??
-          0
-      ) || null,
-      quantidadeNova: Number(
-        novaDevolucao?.quantidadeNova ??
-          novaDevolucao?.troca?.novaQuantidade ??
-          0
-      ) || null,
+      idEpiNovo:
+        Number(novaDevolucao?.idEpiNovo ?? novaDevolucao?.troca?.novoEpi ?? 0) ||
+        null,
+      idTamanhoNovo:
+        Number(novaDevolucao?.idTamanhoNovo ?? novaDevolucao?.tamanhoNovoId ?? 0) ||
+        null,
+      quantidadeNova:
+        Number(
+          novaDevolucao?.quantidadeNova ?? novaDevolucao?.troca?.novaQuantidade ?? 0
+        ) || null,
       assinatura_digital:
         novaDevolucao?.assinatura_digital ??
         novaDevolucao?.assinatura ??
@@ -440,83 +1282,9 @@ function Devolucoes() {
     }
   };
 
-  const imprimirRelatorioDevolucoes = () => {
-    const conteudo = `
-      <html>
-        <head>
-          <title>Relatório de Devoluções de EPI</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #b91c1c; padding-bottom: 20px; margin-bottom: 30px; }
-            .header h1 { margin: 0; color: #b91c1c; font-size: 24px; text-transform: uppercase; }
-            .header .meta { text-align: right; font-size: 12px; color: #666; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th { background-color: #f3f4f6; color: #1f2937; text-align: left; padding: 12px; border-bottom: 2px solid #e5e7eb; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-            td { padding: 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; vertical-align: middle; }
-            tr:nth-child(even) { background-color: #f9fafb; }
-            .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
-            .badge-sim { background-color: #dcfce7; color: #166534; }
-            .badge-nao { background-color: #f3f4f6; color: #4b5563; }
-            .footer { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
-            .assinatura-box { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 10px; font-size: 12px; margin-top: 40px; }
-            @media print {
-              .no-print { display: none; }
-              body { -webkit-print-color-adjust: exact; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1>Relatório de Devoluções</h1>
-              <p style="margin: 5px 0 0; font-size: 14px;">Controle de Estoque e Segurança do Trabalho</p>
-            </div>
-            <div class="meta">
-              <p>Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}</p>
-              <p>Total de Registros: ${devolucoesOrdenadas.length}</p>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Colaborador</th>
-                <th>Item Devolvido</th>
-                <th>Motivo</th>
-                <th>Houve Troca?</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${devolucoesOrdenadas
-                .map((d) => {
-                  const trocaClass = d.houveTroca ? "badge-sim" : "badge-nao";
-                  const trocaTexto = d.houveTroca ? "SIM" : "NÃO";
-
-                  return `
-                    <tr>
-                      <td>${formatarData(d.data_devolucao)}</td>
-                      <td><b>${d.funcionarioNome}</b><br/><span style="color:#666; font-size:11px;">Mat: ${d.funcionarioMatricula}</span></td>
-                      <td>${d.epiNome} (${d.tamanhoNome}) - <b>${d.quantidadeADevolver} un</b></td>
-                      <td>${d.motivoNome}</td>
-                      <td><span class="badge ${trocaClass}">${trocaTexto}</span></td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-          <div class="footer">
-            <div class="assinatura-box">Responsável pelo Almoxarifado</div>
-            <div class="assinatura-box">Técnico de Segurança do Trabalho</div>
-          </div>
-          <script>window.onload = function() { window.print(); }</script>
-        </body>
-      </html>
-    `;
-
-    const win = window.open("", "", "width=900,height=600");
-    win.document.write(conteudo);
-    win.document.close();
+  const aoSalvarDevolucao = async (novaDevolucao) => {
+    await receberNovaDevolucao(novaDevolucao);
+    setModalAberto(false);
   };
 
   return (
@@ -527,13 +1295,13 @@ function Devolucoes() {
             🔄 Devoluções e Trocas
           </h2>
           <p className="text-sm text-gray-500">
-            Registre e consulte devoluções conforme a tabela devolucao.
+            Registre, filtre e imprima relatórios de devoluções conforme a tabela devolução.
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
           <button
-            onClick={imprimirRelatorioDevolucoes}
+            onClick={abrirModalRelatorioGeral}
             className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-200 transition shadow-sm border border-gray-300 flex items-center gap-2 justify-center w-full sm:w-auto"
           >
             <span>🖨️</span> Relatório
@@ -548,20 +1316,77 @@ function Devolucoes() {
         </div>
       </div>
 
-      <div className="relative mb-6">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-          🔍
-        </span>
-        <input
-          type="text"
-          placeholder="Buscar por funcionário, matrícula, motivo, EPI ou troca..."
-          value={busca}
-          onChange={(e) => {
-            setBusca(e.target.value);
-            setPaginaAtual(1);
-          }}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition text-sm lg:text-base"
-        />
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+        <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
+          Filtros do Relatório
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500 mb-1 block">
+              Buscar colaborador / motivo / item
+            </label>
+
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Nome, matrícula, motivo, EPI, tamanho ou troca..."
+                value={busca}
+                onChange={(e) => aoMudarFiltro(setBusca, e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">
+              De (Data Inicial)
+            </label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => aoMudarFiltro(setDataInicio, e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Até (Data Final)
+            </label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => aoMudarFiltro(setDataFim, e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200 flex-col md:flex-row gap-3">
+          <span className="text-xs text-gray-500 w-full md:w-auto text-center md:text-left">
+            Mostrando <b>{devolucoesOrdenadas.length}</b> registros
+          </span>
+
+          <div className="flex gap-2 w-full md:w-auto justify-center md:justify-end flex-wrap">
+            {(busca || dataInicio || dataFim) && (
+              <button
+                onClick={() => {
+                  setBusca("");
+                  setDataInicio("");
+                  setDataFim("");
+                  setPaginaAtual(1);
+                }}
+                className="text-xs text-red-500 font-bold hover:underline px-3 py-2"
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="hidden lg:block overflow-x-auto rounded-lg border border-gray-200">
@@ -591,23 +1416,42 @@ function Devolucoes() {
                     {formatarData(d.data_devolucao)}
                   </td>
 
-                  <td className="p-4 font-medium text-gray-800">
-                    {d.funcionarioNome}
-                    <span className="block text-xs text-gray-400">
-                      Mat: {d.funcionarioMatricula}
-                    </span>
+                  <td className="p-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        abrirModalRelatorioFuncionario({
+                          id: d.idFuncionario,
+                          nome: d.funcionarioNome,
+                          matricula: d.funcionarioMatricula,
+                        })
+                      }
+                      className="text-left group"
+                    >
+                      <div className="font-bold text-red-700 group-hover:text-red-900 group-hover:underline transition">
+                        {d.funcionarioNome}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Mat: {d.funcionarioMatricula}
+                      </div>
+                      <div className="text-[11px] text-red-600 mt-1 opacity-90">
+                        Clique para selecionar período e imprimir
+                      </div>
+                    </button>
                   </td>
 
                   <td className="p-4 text-gray-700">
                     <div>
-                      {d.epiNome} <span className="text-gray-400 text-xs">({d.tamanhoNome})</span>
+                      {d.epiNome}{" "}
+                      <span className="text-gray-400 text-xs">({d.tamanhoNome})</span>
                     </div>
                     <div className="text-xs text-gray-400">
                       Quantidade: {d.quantidadeADevolver}
                     </div>
                     {d.houveTroca && (
                       <div className="text-xs text-green-700 mt-1">
-                        Troca por: <b>{d.epiNovoNome}</b> ({d.tamanhoNovoNome}) x{d.quantidadeNova || 0}
+                        Troca por: <b>{d.epiNovoNome}</b> ({d.tamanhoNovoNome}) x
+                        {d.quantidadeNova || 0}
                       </div>
                     )}
                   </td>
@@ -632,7 +1476,10 @@ function Devolucoes() {
 
                   <td className="p-4 text-center">
                     {d.assinatura_digital || d.token_validacao ? (
-                      <span className="text-xs text-green-600 font-bold bg-green-50 px-2 py-1 rounded border border-green-200" title="Assinado Digitalmente">
+                      <span
+                        className="text-xs text-green-600 font-bold bg-green-50 px-2 py-1 rounded border border-green-200"
+                        title="Assinado Digitalmente"
+                      >
                         ✍️ OK
                       </span>
                     ) : (
@@ -649,7 +1496,10 @@ function Devolucoes() {
       <div className="lg:hidden space-y-4">
         {devolucoesVisiveis.length > 0 ? (
           devolucoesVisiveis.map((d) => (
-            <div key={d.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative">
+            <div
+              key={d.id}
+              className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative"
+            >
               <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
@@ -669,16 +1519,33 @@ function Devolucoes() {
               </div>
 
               <div className="mb-3">
-                <h3 className="font-bold text-gray-800 text-lg">{d.funcionarioNome}</h3>
-                <span className="text-xs text-gray-500 block">
-                  Matrícula: {d.funcionarioMatricula}
-                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    abrirModalRelatorioFuncionario({
+                      id: d.idFuncionario,
+                      nome: d.funcionarioNome,
+                      matricula: d.funcionarioMatricula,
+                    })
+                  }
+                  className="text-left"
+                >
+                  <h3 className="font-bold text-red-700 text-lg hover:underline">
+                    {d.funcionarioNome}
+                  </h3>
+                  <span className="text-xs text-gray-500 block">
+                    Matrícula: {d.funcionarioMatricula}
+                  </span>
+                  <span className="text-[11px] text-red-600 block mt-1">
+                    Toque para selecionar período e imprimir
+                  </span>
+                </button>
               </div>
 
               <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-2">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-3">
                   <span className="text-xs text-gray-500">Item:</span>
-                  <span className="text-sm font-semibold text-gray-700">
+                  <span className="text-sm font-semibold text-gray-700 text-right">
                     {d.epiNome} <small className="text-gray-400">({d.tamanhoNome})</small>
                   </span>
                 </div>
@@ -690,9 +1557,9 @@ function Devolucoes() {
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-3">
                   <span className="text-xs text-gray-500">Motivo:</span>
-                  <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">
+                  <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200 text-right">
                     {d.motivoNome}
                   </span>
                 </div>
@@ -736,7 +1603,9 @@ function Devolucoes() {
           </span>
 
           <button
-            onClick={() => setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas))}
+            onClick={() =>
+              setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas))
+            }
             disabled={paginaAtual === totalPaginas}
             className={`px-4 py-2 rounded text-sm font-bold border ${
               paginaAtual === totalPaginas
@@ -749,10 +1618,40 @@ function Devolucoes() {
         </div>
       )}
 
+      <ModalPeriodoRelatorioDevolucao
+        aberto={modalPeriodoAberto}
+        tipo={tipoRelatorioModal}
+        funcionario={funcionarioSelecionado}
+        inicio={periodoRelatorioInicio}
+        fim={periodoRelatorioFim}
+        erro={erroPeriodoModal}
+        resumo={resumoModalPeriodo}
+        onClose={resetarModalPeriodo}
+        onChangeInicio={(valor) => {
+          setPeriodoRelatorioInicio(valor);
+          setErroPeriodoModal("");
+        }}
+        onChangeFim={(valor) => {
+          setPeriodoRelatorioFim(valor);
+          setErroPeriodoModal("");
+        }}
+        onConfirmar={confirmarGeracaoRelatorio}
+        onLimpar={() => {
+          setPeriodoRelatorioInicio("");
+          setPeriodoRelatorioFim("");
+          setErroPeriodoModal("");
+        }}
+        onAplicarAtalho={({ inicio, fim }) => {
+          setPeriodoRelatorioInicio(inicio || "");
+          setPeriodoRelatorioFim(fim || "");
+          setErroPeriodoModal("");
+        }}
+      />
+
       {modalAberto && (
         <ModalBaixa
           onClose={() => setModalAberto(false)}
-          onSalvar={receberNovaDevolucao}
+          onSalvar={aoSalvarDevolucao}
         />
       )}
     </div>

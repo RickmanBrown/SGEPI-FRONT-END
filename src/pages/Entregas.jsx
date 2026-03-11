@@ -91,7 +91,7 @@ async function buscarPrimeiraLista(rotas, fallback) {
       const lista = extrairLista(resp, fallback);
       if (Array.isArray(lista)) return lista;
     } catch (erro) {
-      // tenta próxima rota
+      // tenta a próxima rota
     }
   }
   return fallback;
@@ -173,6 +173,332 @@ function normalizarItemEntregue(item) {
   };
 }
 
+function pad2(valor) {
+  return String(valor).padStart(2, "0");
+}
+
+function dataLocalParaISO(data) {
+  if (!data) return "";
+  return `${data.getFullYear()}-${pad2(data.getMonth() + 1)}-${pad2(
+    data.getDate()
+  )}`;
+}
+
+function obterHojeISO() {
+  return dataLocalParaISO(new Date());
+}
+
+function obterPrimeiroDiaMesISO() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${pad2(hoje.getMonth() + 1)}-01`;
+}
+
+function obterPrimeiroDiaAnoISO() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-01-01`;
+}
+
+function obterDataMenosDiasISO(dias) {
+  const data = new Date();
+  data.setDate(data.getDate() - dias);
+  return dataLocalParaISO(data);
+}
+
+function formatarDataBR(data) {
+  if (!data) return "--";
+
+  const texto = String(data).substring(0, 10);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const [ano, mes, dia] = texto.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  const dataObj = new Date(data);
+  if (Number.isNaN(dataObj.getTime())) return "--";
+
+  return dataObj.toLocaleDateString("pt-BR");
+}
+
+function obterTextoPeriodo(inicio, fim) {
+  if (inicio && fim) {
+    return `${formatarDataBR(inicio)} até ${formatarDataBR(fim)}`;
+  }
+
+  if (inicio && !fim) {
+    return `A partir de ${formatarDataBR(inicio)}`;
+  }
+
+  if (!inicio && fim) {
+    return `Até ${formatarDataBR(fim)}`;
+  }
+
+  return "Período completo (todos os registros)";
+}
+
+function escapeHtml(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function filtrarEntregasPorPeriodo(lista, inicio, fim) {
+  return lista.filter((entrega) => {
+    const data = String(entrega?.dataEntrega || "").substring(0, 10);
+
+    if (!data) return !inicio && !fim;
+
+    if (inicio && data < inicio) return false;
+    if (fim && data > fim) return false;
+
+    return true;
+  });
+}
+
+function totalItensDaLista(lista) {
+  return lista.reduce((acc, entrega) => {
+    const subtotal = (entrega?.itens || []).reduce(
+      (soma, item) => soma + Number(item?.quantidade ?? 0),
+      0
+    );
+    return acc + subtotal;
+  }, 0);
+}
+
+function totalTiposDaLista(lista) {
+  const tipos = new Set();
+
+  lista.forEach((entrega) => {
+    (entrega?.itens || []).forEach((item) => {
+      tipos.add(`${item?.epiNome || ""}::${item?.tamanho || ""}`);
+    });
+  });
+
+  return tipos.size;
+}
+
+function abrirJanelaImpressao(html) {
+  const win = window.open("", "", "width=1100,height=750");
+
+  if (!win) {
+    window.alert("Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-up.");
+    return;
+  }
+
+  win.document.write(html);
+  win.document.close();
+}
+
+function ModalPeriodoRelatorio({
+  aberto,
+  tipo,
+  funcionario,
+  inicio,
+  fim,
+  erro,
+  resumo,
+  onClose,
+  onChangeInicio,
+  onChangeFim,
+  onConfirmar,
+  onLimpar,
+  onAplicarAtalho,
+}) {
+  if (!aberto) return null;
+
+  const titulo =
+    tipo === "funcionario"
+      ? "Selecionar período do funcionário"
+      : "Selecionar período geral";
+
+  const subtitulo =
+    tipo === "funcionario"
+      ? `Escolha o intervalo de entregas para ${funcionario?.nome || "o funcionário"}`
+      : "Escolha o intervalo para imprimir a distribuição de EPIs de todos os funcionários";
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fade-in">
+        <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold">{titulo}</h3>
+              <p className="text-sm text-blue-100 mt-1">{subtitulo}</p>
+
+              {tipo === "funcionario" && funcionario && (
+                <div className="mt-3 inline-flex items-center gap-2 bg-white/10 border border-white/15 rounded-lg px-3 py-2">
+                  <span className="text-sm font-semibold">{funcionario.nome}</span>
+                  <span className="text-xs text-blue-100">
+                    Matrícula: {funcionario.matricula || "--"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-white/10 hover:bg-white/20 transition rounded-lg px-3 py-2 text-sm font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-5">
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-500 block mb-3">
+              Atalhos rápidos
+            </span>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: "",
+                    fim: "",
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+              >
+                Todo o período
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterPrimeiroDiaMesISO(),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-blue-200 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 transition"
+              >
+                Mês atual
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterDataMenosDiasISO(30),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-blue-200 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 transition"
+              >
+                Últimos 30 dias
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onAplicarAtalho({
+                    inicio: obterPrimeiroDiaAnoISO(),
+                    fim: obterHojeISO(),
+                  })
+                }
+                className="px-3 py-2 rounded-lg border border-blue-200 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 transition"
+              >
+                Ano atual
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                Data inicial
+              </label>
+              <input
+                type="date"
+                value={inicio}
+                onChange={(e) => onChangeInicio(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                Data final
+              </label>
+              <input
+                type="date"
+                value={fim}
+                onChange={(e) => onChangeFim(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              />
+            </div>
+          </div>
+
+          {erro ? (
+            <div className="mt-4 bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-sm">
+              {erro}
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Período selecionado
+              </span>
+              <strong className="text-sm text-gray-800">
+                {obterTextoPeriodo(inicio, fim)}
+              </strong>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Entregas encontradas
+              </span>
+              <strong className="text-2xl text-blue-700">{resumo.totalEntregas}</strong>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-bold block mb-1">
+                Itens no período
+              </span>
+              <strong className="text-2xl text-indigo-700">{resumo.totalItens}</strong>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3">
+            <button
+              type="button"
+              onClick={onLimpar}
+              className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition"
+            >
+              Limpar datas
+            </button>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={onConfirmar}
+                className="px-5 py-3 rounded-xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition shadow-sm"
+              >
+                🖨️ Gerar relatório
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Entregas() {
   const [entregas, setEntregas] = useState([]);
   const [itensEntregues, setItensEntregues] = useState([]);
@@ -188,6 +514,13 @@ function Entregas() {
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const itensPorPagina = 5;
+
+  const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
+  const [tipoRelatorioModal, setTipoRelatorioModal] = useState("geral");
+  const [funcionarioSelecionado, setFuncionarioSelecionado] = useState(null);
+  const [periodoRelatorioInicio, setPeriodoRelatorioInicio] = useState("");
+  const [periodoRelatorioFim, setPeriodoRelatorioFim] = useState("");
+  const [erroPeriodoModal, setErroPeriodoModal] = useState("");
 
   const carregarEntregas = async () => {
     try {
@@ -217,7 +550,7 @@ function Entregas() {
       setEntregas(listaEntregas.map(normalizarEntrega));
       setItensEntregues(listaItensEntregues.map(normalizarItemEntregue));
     } catch (erro) {
-      console.log("Backend não tem entregas ainda. A usar dados falsos (mock).");
+      console.log("Backend não tem entregas ainda. Usando dados mock.");
       setFuncionarios(mockFuncionarios.map(normalizarFuncionario));
       setEpis(mockEpis.map(normalizarEpi));
       setTamanhos(mockTamanhos.map(normalizarTamanho));
@@ -229,13 +562,6 @@ function Entregas() {
   useEffect(() => {
     carregarEntregas();
   }, []);
-
-  const formatarData = (data) => {
-    if (!data) return "--";
-    const dataObj = new Date(data);
-    if (Number.isNaN(dataObj.getTime())) return "--";
-    return dataObj.toLocaleDateString("pt-BR");
-  };
 
   const aoMudarFiltro = (setter, valor) => {
     setter(valor);
@@ -277,7 +603,7 @@ function Entregas() {
       return {
         id: entrega.id,
         idFuncionario: entrega.idFuncionario,
-        dataEntrega: (entrega.data_entrega || "").substring(0, 10),
+        dataEntrega: String(entrega.data_entrega || "").substring(0, 10),
         assinatura: entrega.assinatura,
         tokenValidacao: entrega.token_validacao,
         funcionario,
@@ -292,6 +618,7 @@ function Entregas() {
     return entregasResolvidas.filter((entrega) => {
       const nomeFuncionario = (entrega.funcionario?.nome || "").toLowerCase();
       const matricula = String(entrega.funcionario?.matricula || "");
+
       const matchTexto =
         !termo ||
         nomeFuncionario.includes(termo) ||
@@ -303,8 +630,14 @@ function Entregas() {
         );
 
       let matchData = true;
-      if (dataInicio) matchData = matchData && entrega.dataEntrega >= dataInicio;
-      if (dataFim) matchData = matchData && entrega.dataEntrega <= dataFim;
+
+      if (dataInicio) {
+        matchData = matchData && entrega.dataEntrega >= dataInicio;
+      }
+
+      if (dataFim) {
+        matchData = matchData && entrega.dataEntrega <= dataFim;
+      }
 
       return matchTexto && matchData;
     });
@@ -330,92 +663,519 @@ function Entregas() {
   const entregasVisiveis = entregasOrdenadas.slice(indexPrimeiroItem, indexUltimoItem);
   const totalPaginas = Math.max(1, Math.ceil(entregasOrdenadas.length / itensPorPagina));
 
-  const imprimirRelatorioGeral = () => {
-    const periodoTexto =
-      dataInicio && dataFim
-        ? `${formatarData(dataInicio)} até ${formatarData(dataFim)}`
-        : "Período Completo (Todos os registros)";
+  const estatisticasTela = useMemo(() => {
+    return {
+      totalEntregas: entregasOrdenadas.length,
+      totalItens: totalItensDaLista(entregasOrdenadas),
+      totalTipos: totalTiposDaLista(entregasOrdenadas),
+    };
+  }, [entregasOrdenadas]);
 
+  const baseDoModalPeriodo = useMemo(() => {
+    if (tipoRelatorioModal === "funcionario" && funcionarioSelecionado) {
+      return entregasResolvidas
+        .filter(
+          (entrega) =>
+            Number(entrega.idFuncionario) === Number(funcionarioSelecionado.id)
+        )
+        .sort((a, b) => {
+          if (a.dataEntrega > b.dataEntrega) return -1;
+          if (a.dataEntrega < b.dataEntrega) return 1;
+          return 0;
+        });
+    }
+
+    return [...entregasResolvidas].sort((a, b) => {
+      if (a.dataEntrega > b.dataEntrega) return -1;
+      if (a.dataEntrega < b.dataEntrega) return 1;
+      return 0;
+    });
+  }, [tipoRelatorioModal, funcionarioSelecionado, entregasResolvidas]);
+
+  const resumoModalPeriodo = useMemo(() => {
+    const lista = filtrarEntregasPorPeriodo(
+      baseDoModalPeriodo,
+      periodoRelatorioInicio,
+      periodoRelatorioFim
+    );
+
+    return {
+      totalEntregas: lista.length,
+      totalItens: totalItensDaLista(lista),
+    };
+  }, [baseDoModalPeriodo, periodoRelatorioInicio, periodoRelatorioFim]);
+
+  const resetarModalPeriodo = () => {
+    setModalPeriodoAberto(false);
+    setTipoRelatorioModal("geral");
+    setFuncionarioSelecionado(null);
+    setPeriodoRelatorioInicio("");
+    setPeriodoRelatorioFim("");
+    setErroPeriodoModal("");
+  };
+
+  const abrirModalRelatorioGeral = () => {
+    setTipoRelatorioModal("geral");
+    setFuncionarioSelecionado(null);
+    setPeriodoRelatorioInicio(dataInicio || "");
+    setPeriodoRelatorioFim(dataFim || "");
+    setErroPeriodoModal("");
+    setModalPeriodoAberto(true);
+  };
+
+  const abrirModalRelatorioFuncionario = (funcionario) => {
+    setTipoRelatorioModal("funcionario");
+    setFuncionarioSelecionado(funcionario || null);
+    setPeriodoRelatorioInicio(dataInicio || "");
+    setPeriodoRelatorioFim(dataFim || "");
+    setErroPeriodoModal("");
+    setModalPeriodoAberto(true);
+  };
+
+  const gerarHtmlRelatorio = ({
+    tipo = "geral",
+    funcionario = null,
+    registros = [],
+    inicio = "",
+    fim = "",
+  }) => {
+    const periodoTexto = obterTextoPeriodo(inicio, fim);
     const dataEmissao = new Date().toLocaleDateString("pt-BR");
+    const horaEmissao = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-    const conteudoHTML = `
+    const totalEntregas = registros.length;
+    const totalItens = totalItensDaLista(registros);
+    const totalTipos = totalTiposDaLista(registros);
+
+    const tituloPrincipal =
+      tipo === "funcionario"
+        ? "Histórico Individual de Entregas de EPIs"
+        : "Relatório Geral de Distribuição de EPIs";
+
+    const subtituloPrincipal =
+      tipo === "funcionario"
+        ? `${funcionario?.nome || "Funcionário não identificado"} • Matrícula ${
+            funcionario?.matricula || "--"
+          }`
+        : "Todos os funcionários";
+
+    const linhasTabela =
+      registros.length > 0
+        ? registros
+            .map((ent) => {
+              const funcionarioNome = escapeHtml(
+                ent.funcionario?.nome || "Não identificado"
+              );
+              const matricula = escapeHtml(ent.funcionario?.matricula || "--");
+
+              const itensHtml =
+                ent.itens?.length > 0
+                  ? ent.itens
+                      .map((item) => {
+                        const epi = escapeHtml(item.epiNome || "EPI");
+                        const tamanho = escapeHtml(item.tamanho || "-");
+                        const quantidade = Number(item.quantidade || 0);
+
+                        return `<span class="item-tag">${epi} (${tamanho}) <strong>x${quantidade}</strong></span>`;
+                      })
+                      .join(" ")
+                  : `<span class="sem-itens">Sem itens vinculados</span>`;
+
+              const assinaturaHtml =
+                ent.assinatura || ent.tokenValidacao
+                  ? `<span class="tag tag-ok">Registrada digitalmente</span>`
+                  : `<div class="assinatura-vazia"></div><span class="assinatura-legenda">Assinatura física</span>`;
+
+              return `
+                <tr>
+                  <td class="col-data">${formatarDataBR(ent.dataEntrega)}</td>
+                  <td class="col-funcionario">
+                    <div class="funcionario-nome">${funcionarioNome}</div>
+                    <div class="funcionario-meta">Matrícula: ${matricula}</div>
+                  </td>
+                  <td class="col-itens">${itensHtml}</td>
+                  <td class="col-assinatura">${assinaturaHtml}</td>
+                </tr>
+              `;
+            })
+            .join("")
+        : `
+          <tr>
+            <td colspan="4" class="sem-registros">
+              Nenhum registro encontrado para o período selecionado.
+            </td>
+          </tr>
+        `;
+
+    return `
       <html>
         <head>
-          <title>Relatório de Entrega de EPIs</title>
+          <title>${escapeHtml(tituloPrincipal)}</title>
+          <meta charset="utf-8" />
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-            body { font-family: 'Roboto', sans-serif; padding: 40px; font-size: 12px; color: #374151; -webkit-print-color-adjust: exact; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 25px; }
-            .header-title h1 { margin: 0; color: #1e3a8a; font-size: 22px; text-transform: uppercase; }
-            .header-title p { margin: 4px 0 0; color: #6b7280; font-size: 12px; }
-            .header-meta { text-align: right; font-size: 12px; color: #4b5563; line-height: 1.5; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { background-color: #f3f4f6; color: #111827; text-align: left; padding: 10px; border-bottom: 2px solid #d1d5db; font-size: 11px; text-transform: uppercase; font-weight: 700; }
-            td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-            tr:nth-child(even) { background-color: #f9fafb; }
-            .col-data { white-space: nowrap; width: 10%; font-weight: 500; }
-            .col-func { width: 30%; }
-            .col-itens { width: 40%; }
-            .col-assinatura { width: 20%; text-align: center; }
-            .func-nome { font-weight: 700; color: #1f2937; font-size: 13px; display: block; }
-            .func-meta { font-size: 11px; color: #6b7280; }
-            .item-tag { display: inline-block; background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 1px; }
-            .img-assinatura { max-height: 40px; max-width: 120px; display: inline-block; }
-            .assinatura-manual { border-bottom: 1px solid #9ca3af; width: 80%; margin: 15px auto 5px; display: block; }
-            .assinatura-label { font-size: 9px; color: #9ca3af; font-style: italic; }
-            .summary { text-align: right; margin-top: 10px; font-size: 13px; font-weight: bold; background: #f3f4f6; padding: 10px; border-radius: 6px; }
-            .footer { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
-            .footer-line { width: 40%; border-top: 1px solid #374151; padding-top: 8px; text-align: center; font-size: 11px; }
-            .disclaimer { margin-top: 30px; font-size: 9px; color: #9ca3af; text-align: justify; border-top: 1px solid #e5e7eb; padding-top: 5px; }
-            @media print { .no-print { display: none; } }
+            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&display=swap');
+
+            * {
+              box-sizing: border-box;
+            }
+
+            body {
+              font-family: 'Roboto', sans-serif;
+              margin: 0;
+              padding: 32px;
+              color: #1f2937;
+              background: #ffffff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            .topbar {
+              border: 1px solid #dbeafe;
+              background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+              border-radius: 18px;
+              padding: 22px 24px;
+              margin-bottom: 24px;
+            }
+
+            .topbar-grid {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 24px;
+            }
+
+            .topbar h1 {
+              margin: 0;
+              font-size: 24px;
+              color: #1d4ed8;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.02em;
+            }
+
+            .topbar p {
+              margin: 8px 0 0;
+              color: #475569;
+              font-size: 13px;
+            }
+
+            .meta-box {
+              min-width: 260px;
+              border: 1px solid #dbeafe;
+              background: #ffffff;
+              border-radius: 14px;
+              padding: 14px 16px;
+            }
+
+            .meta-row {
+              font-size: 12px;
+              color: #334155;
+              line-height: 1.6;
+              margin-bottom: 2px;
+            }
+
+            .cards {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+
+            .card {
+              border: 1px solid #e5e7eb;
+              border-radius: 14px;
+              padding: 16px;
+              background: #f8fafc;
+            }
+
+            .card .label {
+              display: block;
+              font-size: 11px;
+              color: #64748b;
+              text-transform: uppercase;
+              font-weight: 700;
+              margin-bottom: 6px;
+            }
+
+            .card .value {
+              font-size: 24px;
+              font-weight: 800;
+              color: #0f172a;
+            }
+
+            .section-title {
+              font-size: 13px;
+              font-weight: 800;
+              color: #475569;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin: 0 0 10px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              overflow: hidden;
+              border-radius: 16px;
+              border: 1px solid #e5e7eb;
+            }
+
+            thead th {
+              text-align: left;
+              padding: 12px 14px;
+              background: #0f172a;
+              color: #ffffff;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+
+            tbody td {
+              padding: 14px;
+              border-bottom: 1px solid #e5e7eb;
+              vertical-align: top;
+              font-size: 12px;
+            }
+
+            tbody tr:nth-child(even) {
+              background: #fafafa;
+            }
+
+            .col-data {
+              width: 12%;
+              white-space: nowrap;
+              font-weight: 700;
+              color: #334155;
+            }
+
+            .col-funcionario {
+              width: 25%;
+            }
+
+            .col-itens {
+              width: 43%;
+            }
+
+            .col-assinatura {
+              width: 20%;
+              text-align: center;
+            }
+
+            .funcionario-nome {
+              font-size: 13px;
+              font-weight: 800;
+              color: #111827;
+              margin-bottom: 4px;
+            }
+
+            .funcionario-meta {
+              font-size: 11px;
+              color: #6b7280;
+            }
+
+            .item-tag {
+              display: inline-block;
+              padding: 5px 8px;
+              margin: 2px;
+              border-radius: 999px;
+              background: #eff6ff;
+              color: #1d4ed8;
+              border: 1px solid #bfdbfe;
+              font-size: 11px;
+              font-weight: 500;
+            }
+
+            .tag {
+              display: inline-block;
+              padding: 6px 10px;
+              border-radius: 999px;
+              font-size: 11px;
+              font-weight: 700;
+            }
+
+            .tag-ok {
+              color: #166534;
+              background: #dcfce7;
+              border: 1px solid #bbf7d0;
+            }
+
+            .assinatura-vazia {
+              width: 80%;
+              margin: 10px auto 6px;
+              border-bottom: 1px solid #94a3b8;
+              min-height: 20px;
+            }
+
+            .assinatura-legenda {
+              font-size: 10px;
+              color: #6b7280;
+              font-style: italic;
+            }
+
+            .sem-itens {
+              color: #94a3b8;
+              font-style: italic;
+            }
+
+            .sem-registros {
+              text-align: center;
+              color: #6b7280;
+              padding: 24px;
+              font-style: italic;
+            }
+
+            .footer {
+              margin-top: 28px;
+              display: flex;
+              justify-content: space-between;
+              gap: 20px;
+            }
+
+            .assinatura-box {
+              width: 48%;
+              padding-top: 42px;
+              border-top: 1px solid #334155;
+              text-align: center;
+              font-size: 11px;
+              color: #475569;
+            }
+
+            .obs {
+              margin-top: 24px;
+              padding: 14px 16px;
+              border-radius: 12px;
+              background: #f8fafc;
+              border: 1px solid #e5e7eb;
+              color: #475569;
+              font-size: 10px;
+              line-height: 1.55;
+            }
+
+            @media print {
+              body {
+                padding: 18px;
+              }
+
+              .topbar {
+                break-inside: avoid;
+              }
+
+              table, tr, td, th {
+                break-inside: avoid;
+              }
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="header-title"><h1>Relatório de Saída de EPIs</h1><p>Controle de Fornecimento Individual</p></div>
-            <div class="header-meta"><strong>Filtro:</strong> ${periodoTexto}<br/><strong>Emissão:</strong> ${dataEmissao}<br/><strong>Status:</strong> Documento Conferido</div>
+          <div class="topbar">
+            <div class="topbar-grid">
+              <div>
+                <h1>${escapeHtml(tituloPrincipal)}</h1>
+                <p>${escapeHtml(subtituloPrincipal)}</p>
+              </div>
+
+              <div class="meta-box">
+                <div class="meta-row"><strong>Período:</strong> ${escapeHtml(periodoTexto)}</div>
+                <div class="meta-row"><strong>Emissão:</strong> ${escapeHtml(dataEmissao)}</div>
+                <div class="meta-row"><strong>Hora:</strong> ${escapeHtml(horaEmissao)}</div>
+                <div class="meta-row"><strong>Tipo:</strong> ${
+                  tipo === "funcionario" ? "Relatório individual" : "Relatório geral"
+                }</div>
+              </div>
+            </div>
           </div>
+
+          <div class="cards">
+            <div class="card">
+              <span class="label">Entregas</span>
+              <span class="value">${totalEntregas}</span>
+            </div>
+
+            <div class="card">
+              <span class="label">Itens distribuídos</span>
+              <span class="value">${totalItens}</span>
+            </div>
+
+            <div class="card">
+              <span class="label">Tipos de item</span>
+              <span class="value">${totalTipos}</span>
+            </div>
+          </div>
+
+          <h2 class="section-title">Detalhamento das entregas</h2>
+
           <table>
-            <thead><tr><th class="col-data">Data</th><th class="col-func">Colaborador / Matrícula</th><th class="col-itens">Itens Entregues</th><th class="col-assinatura">Assinatura</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Colaborador</th>
+                <th>Itens entregues</th>
+                <th>Assinatura</th>
+              </tr>
+            </thead>
             <tbody>
-              ${entregasOrdenadas
-                .map((ent) => {
-                  const listaItens = ent.itens
-                    .map(
-                      (i) =>
-                        `<span class="item-tag">${i.epiNome} (${i.tamanho}) <b>x${i.quantidade}</b></span>`
-                    )
-                    .join(" ");
-
-                  const assinaturaCell =
-                    ent.assinatura || ent.tokenValidacao
-                      ? `<span class="assinatura-label">Registrada digitalmente</span>`
-                      : `<div class="assinatura-manual"></div><span class="assinatura-label">Assinatura Física</span>`;
-
-                  return `<tr>
-                    <td class="col-data">${formatarData(ent.dataEntrega)}</td>
-                    <td class="col-func">
-                      <span class="func-nome">${ent.funcionario?.nome || "Não identificado"}</span>
-                      <span class="func-meta">Mat: ${ent.funcionario?.matricula || "--"}</span>
-                    </td>
-                    <td class="col-itens">${listaItens}</td>
-                    <td class="col-assinatura">${assinaturaCell}</td>
-                  </tr>`;
-                })
-                .join("")}
+              ${linhasTabela}
             </tbody>
           </table>
-          <div class="summary">Total de Entregas Registradas: ${entregasOrdenadas.length}</div>
-          <div class="footer"><div class="footer-line"><b>Responsável pela Entrega</b><br/>Assinatura</div><div class="footer-line"><b>Técnico de Segurança</b><br/>Visto</div></div>
-          <div class="disclaimer">Declaro recebimento dos EPIs conforme NR-06.</div>
-          <script>window.onload = function() { window.print(); }</script>
+
+          <div class="footer">
+            <div class="assinatura-box">
+              Responsável pela Entrega
+            </div>
+            <div class="assinatura-box">
+              Técnico de Segurança / Conferência
+            </div>
+          </div>
+
+          <div class="obs">
+            Declaro, para os devidos fins, que o presente relatório representa o histórico de fornecimento de EPIs conforme os registros lançados no sistema. Recomenda-se a conferência periódica dos dados e das assinaturas em conformidade com a NR-06 e as rotinas internas da empresa.
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
         </body>
       </html>
     `;
+  };
 
-    const win = window.open("", "", "width=950,height=650");
-    win.document.write(conteudoHTML);
-    win.document.close();
+  const confirmarGeracaoRelatorio = () => {
+    if (
+      periodoRelatorioInicio &&
+      periodoRelatorioFim &&
+      periodoRelatorioInicio > periodoRelatorioFim
+    ) {
+      setErroPeriodoModal("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+
+    let base = [...baseDoModalPeriodo];
+    const filtradas = filtrarEntregasPorPeriodo(
+      base,
+      periodoRelatorioInicio,
+      periodoRelatorioFim
+    );
+
+    if (filtradas.length === 0) {
+      window.alert("Nenhuma entrega foi encontrada para o período selecionado.");
+      return;
+    }
+
+    const html = gerarHtmlRelatorio({
+      tipo: tipoRelatorioModal,
+      funcionario: funcionarioSelecionado,
+      registros: filtradas,
+      inicio: periodoRelatorioInicio,
+      fim: periodoRelatorioFim,
+    });
+
+    abrirJanelaImpressao(html);
+    resetarModalPeriodo();
   };
 
   const aoSalvarEntrega = async () => {
@@ -426,7 +1186,7 @@ function Entregas() {
 
   return (
     <div className="bg-white p-4 md:p-6 rounded-xl shadow-lg border border-gray-100 animate-fade-in max-w-full">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
         <div>
           <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center gap-2">
             📋 Histórico de Entregas
@@ -434,30 +1194,73 @@ function Entregas() {
           <p className="text-sm text-gray-500">
             Consulte, filtre e imprima relatórios de entrega de EPIs.
           </p>
+          <p className="text-xs text-blue-700 mt-2 font-medium">
+            Dica: clique no nome do colaborador para imprimir o histórico individual por período.
+          </p>
         </div>
 
-        <button
-          onClick={() => setModalAberto(true)}
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-800 transition shadow-sm flex items-center gap-2 justify-center w-full lg:w-auto"
-        >
-          <span>➕</span> Nova Entrega
-        </button>
+        <div className="flex w-full xl:w-auto gap-2 flex-col sm:flex-row">
+          <button
+            onClick={abrirModalRelatorioGeral}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-700 transition shadow-sm flex items-center gap-2 justify-center w-full xl:w-auto"
+          >
+            <span>🖨️</span> PDF Geral
+          </button>
+
+          <button
+            onClick={() => setModalAberto(true)}
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-800 transition shadow-sm flex items-center gap-2 justify-center w-full xl:w-auto"
+          >
+            <span>➕</span> Nova Entrega
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+          <span className="text-[11px] text-blue-700 uppercase font-bold tracking-wide block mb-1">
+            Entregas visíveis
+          </span>
+          <strong className="text-2xl text-blue-900">
+            {estatisticasTela.totalEntregas}
+          </strong>
+        </div>
+
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <span className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide block mb-1">
+            Itens distribuídos
+          </span>
+          <strong className="text-2xl text-indigo-900">
+            {estatisticasTela.totalItens}
+          </strong>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <span className="text-[11px] text-gray-600 uppercase font-bold tracking-wide block mb-1">
+            Tipos de item
+          </span>
+          <strong className="text-2xl text-gray-900">
+            {estatisticasTela.totalTipos}
+          </strong>
+        </div>
       </div>
 
       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
-          Filtros do Relatório
+          Filtros da tela
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-gray-500 mb-1 block">
-              Buscar Colaborador / Item
+              Buscar colaborador / item
             </label>
+
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
                 🔍
               </span>
+
               <input
                 type="text"
                 placeholder="Nome, matrícula, EPI ou tamanho..."
@@ -469,7 +1272,9 @@ function Entregas() {
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">De (Data Inicial)</label>
+            <label className="text-xs text-gray-500 mb-1 block">
+              De (data inicial)
+            </label>
             <input
               type="date"
               value={dataInicio}
@@ -479,7 +1284,9 @@ function Entregas() {
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Até (Data Final)</label>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Até (data final)
+            </label>
             <input
               type="date"
               value={dataFim}
@@ -491,10 +1298,10 @@ function Entregas() {
 
         <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200 flex-col md:flex-row gap-3">
           <span className="text-xs text-gray-500 w-full md:w-auto text-center md:text-left">
-            Mostrando <b>{entregasOrdenadas.length}</b> registros
+            Mostrando <b>{entregasOrdenadas.length}</b> registros na tela
           </span>
 
-          <div className="flex gap-2 w-full md:w-auto justify-center md:justify-end">
+          <div className="flex gap-2 w-full md:w-auto justify-center md:justify-end flex-wrap">
             {(busca || dataInicio || dataFim) && (
               <button
                 onClick={() => {
@@ -503,18 +1310,12 @@ function Entregas() {
                   setDataFim("");
                   setPaginaAtual(1);
                 }}
-                className="text-xs text-red-500 font-bold hover:underline px-3"
+                className="text-xs text-red-500 font-bold hover:underline px-3 py-2"
               >
-                Limpar Filtros
+                Limpar filtros da tela
               </button>
             )}
 
-            <button
-              onClick={imprimirRelatorioGeral}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-700 transition shadow-sm text-sm flex items-center gap-2"
-            >
-              <span>🖨️</span> PDF
-            </button>
           </div>
         </div>
       </div>
@@ -541,16 +1342,25 @@ function Entregas() {
               entregasVisiveis.map((e) => (
                 <tr key={e.id} className="hover:bg-gray-50 transition">
                   <td className="p-4 text-gray-600 font-mono text-sm whitespace-nowrap">
-                    {formatarData(e.dataEntrega)}
+                    {formatarDataBR(e.dataEntrega)}
                   </td>
 
                   <td className="p-4">
-                    <div className="font-bold text-gray-800">
-                      {e.funcionario?.nome || "Desconhecido"}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Mat: {e.funcionario?.matricula || "--"}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => abrirModalRelatorioFuncionario(e.funcionario)}
+                      className="text-left group"
+                    >
+                      <div className="font-bold text-blue-700 group-hover:text-blue-900 group-hover:underline transition">
+                        {e.funcionario?.nome || "Desconhecido"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Mat: {e.funcionario?.matricula || "--"}
+                      </div>
+                      <div className="text-[11px] text-blue-600 mt-1 opacity-90">
+                        Clique para selecionar período e imprimir
+                      </div>
+                    </button>
                   </td>
 
                   <td className="p-4">
@@ -593,11 +1403,14 @@ function Entregas() {
       <div className="lg:hidden space-y-4">
         {entregasVisiveis.length > 0 ? (
           entregasVisiveis.map((e) => (
-            <div key={e.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative">
+            <div
+              key={e.id}
+              className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative"
+            >
               <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                    {formatarData(e.dataEntrega)}
+                    {formatarDataBR(e.dataEntrega)}
                   </span>
 
                   {e.assinatura || e.tokenValidacao ? (
@@ -613,12 +1426,21 @@ function Entregas() {
               </div>
 
               <div className="mb-3">
-                <h3 className="font-bold text-gray-800 text-lg">
-                  {e.funcionario?.nome || "Desconhecido"}
-                </h3>
-                <span className="text-xs text-gray-500 block">
-                  Matrícula: {e.funcionario?.matricula || "--"}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => abrirModalRelatorioFuncionario(e.funcionario)}
+                  className="text-left"
+                >
+                  <h3 className="font-bold text-blue-700 text-lg hover:underline">
+                    {e.funcionario?.nome || "Desconhecido"}
+                  </h3>
+                  <span className="text-xs text-gray-500 block">
+                    Matrícula: {e.funcionario?.matricula || "--"}
+                  </span>
+                  <span className="text-[11px] text-blue-600 block mt-1">
+                    Toque para selecionar período e imprimir
+                  </span>
+                </button>
               </div>
 
               <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
@@ -633,8 +1455,9 @@ function Entregas() {
                         key={i.id}
                         className="bg-white text-blue-800 text-xs px-2 py-1 rounded border border-blue-100 shadow-sm"
                       >
-                        {i.epiNome} <span className="text-gray-400">|</span> Tam: {i.tamanho}{" "}
-                        <span className="text-gray-400">|</span> <b>x{i.quantidade}</b>
+                        {i.epiNome} <span className="text-gray-400">|</span> Tam:{" "}
+                        {i.tamanho} <span className="text-gray-400">|</span>{" "}
+                        <b>x{i.quantidade}</b>
                       </span>
                     ))
                   ) : (
@@ -672,7 +1495,9 @@ function Entregas() {
           </span>
 
           <button
-            onClick={() => setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas))}
+            onClick={() =>
+              setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas))
+            }
             disabled={paginaAtual === totalPaginas}
             className={`px-4 py-2 rounded text-sm font-bold border ${
               paginaAtual === totalPaginas
@@ -691,6 +1516,36 @@ function Entregas() {
           onSalvar={aoSalvarEntrega}
         />
       )}
+
+      <ModalPeriodoRelatorio
+        aberto={modalPeriodoAberto}
+        tipo={tipoRelatorioModal}
+        funcionario={funcionarioSelecionado}
+        inicio={periodoRelatorioInicio}
+        fim={periodoRelatorioFim}
+        erro={erroPeriodoModal}
+        resumo={resumoModalPeriodo}
+        onClose={resetarModalPeriodo}
+        onChangeInicio={(valor) => {
+          setPeriodoRelatorioInicio(valor);
+          setErroPeriodoModal("");
+        }}
+        onChangeFim={(valor) => {
+          setPeriodoRelatorioFim(valor);
+          setErroPeriodoModal("");
+        }}
+        onConfirmar={confirmarGeracaoRelatorio}
+        onLimpar={() => {
+          setPeriodoRelatorioInicio("");
+          setPeriodoRelatorioFim("");
+          setErroPeriodoModal("");
+        }}
+        onAplicarAtalho={({ inicio, fim }) => {
+          setPeriodoRelatorioInicio(inicio || "");
+          setPeriodoRelatorioFim(fim || "");
+          setErroPeriodoModal("");
+        }}
+      />
     </div>
   );
 }

@@ -1,34 +1,45 @@
 import { useState } from "react";
+import { api } from "../services/api";
 
 function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setErro("");
 
-    if (!senha) {
-      setErro("Por favor, digite a senha.");
+    if (!email || !senha) {
+      setErro("Preencha e-mail e senha.");
       return;
     }
 
-    setCarregando(true);
+    try {
+      setCarregando(true);
 
-    setTimeout(() => {
-      if (senha === "123") {
-        const dadosUsuario = {
-          nome: "Administrador",
-          role: "admin",
-        };
+      const resposta = await api.post("/login", {
+        email,
+        senha,
+      });
 
-        onLogin(dadosUsuario);
-      } else {
-        setErro("Senha incorreta.");
-        setCarregando(false);
+      if (!resposta?.token) {
+        throw new Error("Token não recebido no login.");
       }
-    }, 800);
+
+      localStorage.setItem("token", resposta.token);
+      localStorage.setItem("usuario", JSON.stringify(resposta.usuario));
+
+      onLogin({
+        token: resposta.token,
+        usuario: resposta.usuario,
+      });
+    } catch (err) {
+      setErro(err.message || "Erro ao realizar login.");
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
@@ -37,7 +48,9 @@ function Login({ onLogin }) {
         <div className="absolute top-0 left-0 w-full h-2 bg-slate-500"></div>
 
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">SGEPI</h1>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            SGEPI
+          </h1>
           <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mt-1">
             Login de Acesso
           </p>
@@ -50,6 +63,19 @@ function Login({ onLogin }) {
         )}
 
         <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">
+              E-mail
+            </label>
+            <input
+              type="email"
+              className="w-full px-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition"
+              placeholder="seuemail@empresa.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">
               Senha de Acesso

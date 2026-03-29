@@ -1,474 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ModalEntrada from "../components/modals/ModalEntrada";
 import ModalEntrega from "../components/modals/ModalEntrega";
 import ModalBaixa from "../components/modals/ModalBaixa";
 import ModalBusca from "../components/modals/ModalBusca";
-import { api } from "../services/api";
+import ModalDetalhesDashboard from "../components/modals/ModalDetalhesDashboard";
+import DashboardCard from "../components/DashboardCard";
+import QuickActionCard from "../components/QuickActionCard";
+import { formatarMoeda } from "../utils/dashboardFormatters";
 import { temPermissao } from "../utils/permissoes";
-
-const mockEpis = [
-  {
-    id: 1,
-    nome: "Bota de Segurança",
-    fabricante: "Bracol",
-    CA: "15432",
-    descricao: "Bota ocupacional para uso industrial",
-    validade_CA: "2027-12-31T00:00:00Z",
-    idTipoProtecao: 6,
-    alerta_minimo: 10,
-  },
-  {
-    id: 2,
-    nome: "Óculos de Proteção Incolor",
-    fabricante: "3M",
-    CA: "10346",
-    descricao: "Proteção visual contra partículas",
-    validade_CA: "2028-06-30T00:00:00Z",
-    idTipoProtecao: 4,
-    alerta_minimo: 20,
-  },
-  {
-    id: 3,
-    nome: "Luva de Raspa",
-    fabricante: "Danny",
-    CA: "90876",
-    descricao: "Luva para proteção mecânica",
-    validade_CA: "2028-10-15T00:00:00Z",
-    idTipoProtecao: 2,
-    alerta_minimo: 15,
-  },
-];
-
-const mockTamanhos = [
-  { id: 7, tamanho: "38" },
-  { id: 8, tamanho: "39" },
-  { id: 9, tamanho: "Único" },
-  { id: 10, tamanho: "M" },
-  { id: 11, tamanho: "G" },
-];
-
-const mockFuncionarios = [
-  { id: 1, nome: "João Silva", matricula: "483920" },
-  { id: 2, nome: "Maria Santos", matricula: "739104" },
-  { id: 3, nome: "Carlos Oliveira", matricula: "102938" },
-  { id: 4, nome: "Ana Pereira", matricula: "998877" },
-];
-
-const mockEntradas = [
-  {
-    id: 101,
-    idEpi: 1,
-    idTamanho: 7,
-    idFornecedor: 2,
-    data_entrada: "2026-03-01",
-    quantidade: 30,
-    quantidadeAtual: 18,
-    data_fabricacao: "2026-01-10",
-    data_validade: "2027-12-31",
-    lote: "BOTA-001",
-    valor_unitario: 129.9,
-  },
-  {
-    id: 102,
-    idEpi: 2,
-    idTamanho: 9,
-    idFornecedor: 1,
-    data_entrada: "2026-03-02",
-    quantidade: 100,
-    quantidadeAtual: 65,
-    data_fabricacao: "2026-02-01",
-    data_validade: "2028-06-30",
-    lote: "OCULOS-003",
-    valor_unitario: 15.5,
-  },
-  {
-    id: 103,
-    idEpi: 3,
-    idTamanho: 10,
-    idFornecedor: 1,
-    data_entrada: "2026-03-03",
-    quantidade: 40,
-    quantidadeAtual: 12,
-    data_fabricacao: "2026-02-10",
-    data_validade: "2028-08-20",
-    lote: "LUVA-009",
-    valor_unitario: 8.9,
-  },
-  {
-    id: 104,
-    idEpi: 3,
-    idTamanho: 11,
-    idFornecedor: 1,
-    data_entrada: "2026-03-03",
-    quantidade: 35,
-    quantidadeAtual: 9,
-    data_fabricacao: "2026-02-10",
-    data_validade: "2028-08-20",
-    lote: "LUVA-010",
-    valor_unitario: 9.5,
-  },
-];
-
-const hojeMock = (() => {
-  const data = new Date();
-  const ano = data.getFullYear();
-  const mes = String(data.getMonth() + 1).padStart(2, "0");
-  const dia = String(data.getDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
-})();
-
-const mockEntregas = [
-  {
-    id: 201,
-    idFuncionario: 1,
-    data_entrega: hojeMock,
-    assinatura: null,
-    token_validacao: null,
-  },
-  {
-    id: 202,
-    idFuncionario: 2,
-    data_entrega: hojeMock,
-    assinatura: null,
-    token_validacao: null,
-  },
-  {
-    id: 203,
-    idFuncionario: 3,
-    data_entrega: "2026-03-01",
-    assinatura: null,
-    token_validacao: null,
-  },
-];
-
-const mockItensEntregues = [
-  { id: "ie1", idEntrega: 201, idEpi: 1, idTamanho: 7, quantidade: 1 },
-  { id: "ie2", idEntrega: 201, idEpi: 3, idTamanho: 10, quantidade: 2 },
-  { id: "ie3", idEntrega: 202, idEpi: 2, idTamanho: 9, quantidade: 1 },
-  { id: "ie4", idEntrega: 203, idEpi: 3, idTamanho: 11, quantidade: 1 },
-];
-
-const mockDevolucoes = [
-  {
-    id: 301,
-    idFuncionario: 1,
-    idEpi: 1,
-    idMotivo: 1,
-    data_devolucao: "2026-03-01",
-    idTamanho: 7,
-    quantidadeADevolver: 1,
-    idEpiNovo: 1,
-    idTamanhoNovo: 7,
-    quantidadeNova: 1,
-    assinatura_digital: null,
-    token_validacao: null,
-  },
-];
-
-function extrairLista(resp, fallback = []) {
-  const dados = resp?.data ?? resp ?? fallback;
-  return Array.isArray(dados) ? dados : fallback;
-}
-
-async function buscarPrimeiraLista(rotas, fallback = []) {
-  for (const rota of rotas) {
-    try {
-      const resp = await api.get(rota);
-      const lista = extrairLista(resp, fallback);
-      if (Array.isArray(lista)) return lista;
-    } catch (erro) {
-      // tenta próxima rota
-    }
-  }
-  return fallback;
-}
-
-function obterHojeISO() {
-  const data = new Date();
-  const ano = data.getFullYear();
-  const mes = String(data.getMonth() + 1).padStart(2, "0");
-  const dia = String(data.getDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
-}
-
-function formatarData(data) {
-  if (!data) return "--";
-  const valor = String(data).substring(0, 10);
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    const [ano, mes, dia] = valor.split("-");
-    return `${dia}/${mes}/${ano}`;
-  }
-
-  const dataObj = new Date(data);
-  if (Number.isNaN(dataObj.getTime())) return "--";
-  return dataObj.toLocaleDateString("pt-BR");
-}
-
-function formatarMoeda(valor) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function normalizarEpi(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    nome: item?.nome ?? "",
-    alerta_minimo: Number(item?.alerta_minimo ?? item?.alertaMinimo ?? 0),
-  };
-}
-
-function normalizarTamanho(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    tamanho: String(item?.tamanho ?? ""),
-  };
-}
-
-function normalizarFuncionario(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    nome: item?.nome ?? "",
-    matricula: String(item?.matricula ?? ""),
-  };
-}
-
-function normalizarEntrada(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    idEpi: Number(
-      item?.idEpi ??
-        item?.epi_id ??
-        item?.epiId ??
-        item?.id_epi ??
-        item?.idProduto ??
-        item?.produto_id ??
-        0
-    ),
-    idTamanho: Number(
-      item?.idTamanho ??
-        item?.tamanho_id ??
-        item?.tamanhoId ??
-        item?.id_tamanho ??
-        0
-    ),
-    quantidade: Number(item?.quantidade ?? 0),
-    quantidadeAtual: Number(
-      item?.quantidadeAtual ??
-        item?.quantidade_atual ??
-        item?.estoqueAtual ??
-        item?.estoque_atual ??
-        item?.quantidade ??
-        0
-    ),
-    valor_unitario: Number(
-      item?.valor_unitario ?? item?.valorUnitario ?? item?.preco ?? 0
-    ),
-    data_entrada: item?.data_entrada ?? item?.dataEntrada ?? "",
-    epiNome: item?.epiNome ?? item?.epi_nome ?? "",
-    tamanhoTexto: item?.tamanho ?? item?.tamanhoTexto ?? "",
-    lote: item?.lote ?? "",
-  };
-}
-
-function normalizarEntrega(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    idFuncionario: Number(
-      item?.idFuncionario ??
-        item?.funcionario_id ??
-        item?.funcionarioId ??
-        item?.funcionario?.id ??
-        item?.id_funcionario ??
-        0
-    ),
-    data_entrega: item?.data_entrega ?? item?.dataEntrega ?? item?.data ?? "",
-    assinatura: item?.assinatura ?? null,
-    token_validacao: item?.token_validacao ?? item?.tokenValidacao ?? null,
-  };
-}
-
-function normalizarItemEntregue(item) {
-  return {
-    id: item?.id ?? Date.now() + Math.random(),
-    idEntrega: Number(
-      item?.idEntrega ??
-        item?.entrega_id ??
-        item?.entregaId ??
-        item?.id_entrega ??
-        0
-    ),
-    idEpi: Number(
-      item?.idEpi ??
-        item?.epi_id ??
-        item?.epiId ??
-        item?.id_epi ??
-        item?.produto_id ??
-        0
-    ),
-    idTamanho: Number(
-      item?.idTamanho ??
-        item?.tamanho_id ??
-        item?.tamanhoId ??
-        item?.id_tamanho ??
-        0
-    ),
-    quantidade: Number(item?.quantidade ?? 0),
-    epiNome: item?.epiNome ?? item?.epi_nome ?? "",
-    tamanhoTexto: item?.tamanho ?? item?.tamanhoTexto ?? "",
-  };
-}
-
-function normalizarDevolucao(item) {
-  return {
-    id: Number(item?.id ?? 0),
-    data_devolucao:
-      item?.data_devolucao ?? item?.dataDevolucao ?? item?.data ?? "",
-  };
-}
-
-function ModalDetalhesDashboard({
-  aberto,
-  titulo,
-  subtitulo,
-  icon,
-  colunas = [],
-  dados = [],
-  tipo = "tabela",
-  onClose,
-}) {
-  if (!aberto) return null;
-
-  return (
-    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200 animate-fade-in">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-5 md:px-6 py-4 md:py-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-xl shrink-0">
-                  {icon}
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="text-lg md:text-xl font-bold truncate">
-                    {titulo}
-                  </h3>
-                  <p className="text-sm text-slate-300 mt-1">{subtitulo}</p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="shrink-0 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition font-bold"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(90vh-96px)]">
-          {dados.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500">
-              Nenhum registro encontrado.
-            </div>
-          ) : (
-            <>
-              <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-100 text-gray-600 text-sm uppercase">
-                    <tr>
-                      {colunas.map((coluna) => (
-                        <th
-                          key={coluna.key}
-                          className="p-4 font-semibold whitespace-nowrap"
-                        >
-                          {coluna.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {dados.map((item, index) => (
-                      <tr
-                        key={item.id ?? index}
-                        className="hover:bg-gray-50 transition"
-                      >
-                        {colunas.map((coluna) => (
-                          <td
-                            key={`${coluna.key}-${item.id ?? index}`}
-                            className="p-4 text-sm text-gray-700 align-top"
-                          >
-                            {typeof coluna.render === "function"
-                              ? coluna.render(item)
-                              : item[coluna.key]}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden space-y-3">
-                {dados.map((item, index) => (
-                  <div
-                    key={item.id ?? index}
-                    className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4"
-                  >
-                    <div className="space-y-2">
-                      {colunas.map((coluna) => (
-                        <div
-                          key={`${coluna.key}-${item.id ?? index}`}
-                          className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-b-0 last:pb-0"
-                        >
-                          <span className="text-[11px] uppercase font-bold tracking-wide text-gray-400">
-                            {coluna.label}
-                          </span>
-                          <div className="text-sm text-gray-700">
-                            {typeof coluna.render === "function"
-                              ? coluna.render(item)
-                              : item[coluna.key]}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {tipo === "lista" && dados.length > 0 && (
-            <div className="mt-4 text-xs text-gray-400">
-              Total de registros exibidos: <b>{dados.length}</b>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { useDashboardResumo } from "../hooks/useDashboardResumo";
 
 function Dashboard({ usuarioLogado }) {
   const [modalAberto, setModalAberto] = useState(null);
   const [detalheCardAberto, setDetalheCardAberto] = useState(null);
 
-  const [epis, setEpis] = useState([]);
-  const [tamanhos, setTamanhos] = useState([]);
-  const [funcionarios, setFuncionarios] = useState([]);
-  const [entradas, setEntradas] = useState([]);
-  const [entregas, setEntregas] = useState([]);
-  const [itensEntregues, setItensEntregues] = useState([]);
-  const [devolucoes, setDevolucoes] = useState([]);
-  const [carregandoResumo, setCarregandoResumo] = useState(true);
+  const {
+    epis,
+    entradas,
+    carregandoResumo,
+    resumo,
+    estoqueDetalhado,
+    entregasHojeDetalhadas,
+    alertasDetalhados,
+    valorEstoqueDetalhado,
+    carregarResumo,
+  } = useDashboardResumo();
 
   const fecharModal = () => setModalAberto(null);
   const fecharDetalheCard = () => setDetalheCardAberto(null);
@@ -479,243 +35,10 @@ function Dashboard({ usuarioLogado }) {
     ? true
     : temPermissao(usuarioLogado, "visualizar_dashboard");
 
-  const carregarResumo = async () => {
-    setCarregandoResumo(true);
-
-    try {
-      const [
-        listaEpis,
-        listaTamanhos,
-        listaFuncionarios,
-        listaEntradas,
-        listaEntregas,
-        listaItensEntregues,
-        listaDevolucoes,
-      ] = await Promise.all([
-        buscarPrimeiraLista(["/epis", "/epi", "/produtos"], mockEpis),
-        buscarPrimeiraLista(["/tamanhos", "/tamanho"], mockTamanhos),
-        buscarPrimeiraLista(["/funcionarios"], mockFuncionarios),
-        buscarPrimeiraLista(
-          ["/entrada-epi", "/entrada_epi", "/entradas"],
-          mockEntradas
-        ),
-        buscarPrimeiraLista(
-          ["/entrega-epi", "/entrega_epi", "/entregas"],
-          mockEntregas
-        ),
-        buscarPrimeiraLista(
-          ["/epis-entregues", "/epis_entregues"],
-          mockItensEntregues
-        ),
-        buscarPrimeiraLista(["/devolucoes", "/devolucao"], mockDevolucoes),
-      ]);
-
-      setEpis(listaEpis.map(normalizarEpi));
-      setTamanhos(listaTamanhos.map(normalizarTamanho));
-      setFuncionarios(listaFuncionarios.map(normalizarFuncionario));
-      setEntradas(listaEntradas.map(normalizarEntrada));
-      setEntregas(listaEntregas.map(normalizarEntrega));
-      setItensEntregues(listaItensEntregues.map(normalizarItemEntregue));
-      setDevolucoes(listaDevolucoes.map(normalizarDevolucao));
-    } finally {
-      setCarregandoResumo(false);
-    }
+  const aoSalvarModal = async () => {
+    await carregarResumo();
+    fecharModal();
   };
-
-  useEffect(() => {
-    carregarResumo();
-  }, []);
-
-  const estoqueDetalhado = useMemo(() => {
-    const mapa = {};
-
-    entradas.forEach((entrada) => {
-      const epi = epis.find((item) => Number(item.id) === Number(entrada.idEpi));
-      const tamanho = tamanhos.find(
-        (item) => Number(item.id) === Number(entrada.idTamanho)
-      );
-
-      const nomeItem =
-        entrada.epiNome || epi?.nome || `EPI #${entrada.idEpi || "--"}`;
-      const tamanhoLabel =
-        entrada.tamanhoTexto || tamanho?.tamanho || "Sem tamanho";
-
-      const chave = `${entrada.idEpi}-${entrada.idTamanho}`;
-
-      if (!mapa[chave]) {
-        mapa[chave] = {
-          id: chave,
-          idEpi: Number(entrada.idEpi),
-          idTamanho: Number(entrada.idTamanho),
-          item: nomeItem,
-          tamanho: tamanhoLabel,
-          quantidade: 0,
-        };
-      }
-
-      mapa[chave].quantidade += Number(entrada.quantidadeAtual || 0);
-    });
-
-    return Object.values(mapa)
-      .filter((item) => Number(item.quantidade) > 0)
-      .sort((a, b) => {
-        if (a.item.localeCompare(b.item) !== 0) {
-          return a.item.localeCompare(b.item);
-        }
-        return String(a.tamanho).localeCompare(String(b.tamanho));
-      });
-  }, [entradas, epis, tamanhos]);
-
-  const entregasHojeDetalhadas = useMemo(() => {
-    const hoje = obterHojeISO();
-    const linhas = [];
-
-    const entregasDoDia = entregas.filter(
-      (entrega) => String(entrega.data_entrega || "").substring(0, 10) === hoje
-    );
-
-    entregasDoDia.forEach((entrega) => {
-      const funcionario = funcionarios.find(
-        (item) => Number(item.id) === Number(entrega.idFuncionario)
-      );
-
-      const itensDaEntrega = itensEntregues.filter(
-        (item) => Number(item.idEntrega) === Number(entrega.id)
-      );
-
-      if (itensDaEntrega.length === 0) {
-        linhas.push({
-          id: `sem-item-${entrega.id}`,
-          data: formatarData(entrega.data_entrega),
-          funcionario: funcionario?.nome || "Funcionário não identificado",
-          matricula: funcionario?.matricula || "--",
-          item: "Sem item vinculado",
-          tamanho: "-",
-          quantidade: 0,
-        });
-      } else {
-        itensDaEntrega.forEach((itemEntregue, index) => {
-          const epi = epis.find(
-            (epiItem) => Number(epiItem.id) === Number(itemEntregue.idEpi)
-          );
-          const tamanho = tamanhos.find(
-            (tamItem) => Number(tamItem.id) === Number(itemEntregue.idTamanho)
-          );
-
-          linhas.push({
-            id: `${entrega.id}-${index}-${itemEntregue.id}`,
-            data: formatarData(entrega.data_entrega),
-            funcionario: funcionario?.nome || "Funcionário não identificado",
-            matricula: funcionario?.matricula || "--",
-            item:
-              itemEntregue.epiNome ||
-              epi?.nome ||
-              `EPI #${itemEntregue.idEpi || "--"}`,
-            tamanho:
-              itemEntregue.tamanhoTexto || tamanho?.tamanho || "Sem tamanho",
-            quantidade: Number(itemEntregue.quantidade || 0),
-          });
-        });
-      }
-    });
-
-    return linhas.sort((a, b) => a.funcionario.localeCompare(b.funcionario));
-  }, [entregas, itensEntregues, funcionarios, epis, tamanhos]);
-
-  const alertasDetalhados = useMemo(() => {
-    return estoqueDetalhado
-      .map((linha) => {
-        const epi = epis.find((item) => Number(item.id) === Number(linha.idEpi));
-        const alertaMinimo = Number(epi?.alerta_minimo || 0);
-
-        return {
-          id: linha.id,
-          item: linha.item,
-          tamanho: linha.tamanho,
-          quantidade: Number(linha.quantidade || 0),
-          alertaMinimo,
-        };
-      })
-      .filter(
-        (item) =>
-          Number(item.alertaMinimo) > 0 &&
-          Number(item.quantidade) <= Number(item.alertaMinimo)
-      )
-      .sort((a, b) => a.quantidade - b.quantidade);
-  }, [estoqueDetalhado, epis]);
-
-  const valorEstoqueDetalhado = useMemo(() => {
-    const mapa = {};
-
-    entradas.forEach((entrada) => {
-      const epi = epis.find((item) => Number(item.id) === Number(entrada.idEpi));
-      const tamanho = tamanhos.find(
-        (item) => Number(item.id) === Number(entrada.idTamanho)
-      );
-
-      const nomeItem =
-        entrada.epiNome || epi?.nome || `EPI #${entrada.idEpi || "--"}`;
-      const tamanhoLabel =
-        entrada.tamanhoTexto || tamanho?.tamanho || "Sem tamanho";
-
-      const chave = `${entrada.idEpi}-${entrada.idTamanho}`;
-
-      if (!mapa[chave]) {
-        mapa[chave] = {
-          id: chave,
-          item: nomeItem,
-          tamanho: tamanhoLabel,
-          quantidade: 0,
-          valorTotal: 0,
-        };
-      }
-
-      mapa[chave].quantidade += Number(entrada.quantidadeAtual || 0);
-      mapa[chave].valorTotal +=
-        Number(entrada.quantidadeAtual || 0) *
-        Number(entrada.valor_unitario || 0);
-    });
-
-    return Object.values(mapa)
-      .filter((item) => Number(item.quantidade) > 0)
-      .sort((a, b) => b.valorTotal - a.valorTotal);
-  }, [entradas, epis, tamanhos]);
-
-  const resumo = useMemo(() => {
-    const hoje = obterHojeISO();
-
-    const totalItens = entradas.reduce(
-      (acc, entrada) => acc + Number(entrada.quantidadeAtual || 0),
-      0
-    );
-
-    const entregasHoje = entregas.filter(
-      (entrega) => String(entrega.data_entrega || "").substring(0, 10) === hoje
-    ).length;
-
-    const devolucoesHoje = devolucoes.filter(
-      (devolucao) =>
-        String(devolucao.data_devolucao || "").substring(0, 10) === hoje
-    ).length;
-
-    const valorTotal = entradas.reduce(
-      (acc, entrada) =>
-        acc +
-        Number(entrada.quantidadeAtual || 0) *
-          Number(entrada.valor_unitario || 0),
-      0
-    );
-
-    const alertas = alertasDetalhados.length;
-
-    return {
-      totalItens,
-      entregasHoje,
-      devolucoesHoje,
-      alertas,
-      valorTotal,
-    };
-  }, [entradas, entregas, devolucoes, alertasDetalhados]);
 
   const detalheCardAtual = useMemo(() => {
     if (detalheCardAberto === "estoque") {
@@ -957,7 +280,7 @@ function Dashboard({ usuarioLogado }) {
   }
 
   return (
-    <div className="animate-fade-in pb-20 md:pb-0">
+    <div className="animate-fade-in overflow-x-hidden pb-20 md:pb-0">
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
@@ -994,46 +317,11 @@ function Dashboard({ usuarioLogado }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 mb-8 md:mb-10">
         {cardsPrincipais.map((card) => (
-          <button
+          <DashboardCard
             key={card.id}
-            type="button"
+            card={card}
             onClick={() => setDetalheCardAberto(card.id)}
-            className={`group text-left bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer ${card.ring}`}
-          >
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="min-w-0">
-                <span className="inline-flex text-[10px] md:text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-2">
-                  {card.badge}
-                </span>
-
-                <h3 className="text-gray-600 text-sm md:text-sm font-bold uppercase leading-tight">
-                  {card.titulo}
-                </h3>
-              </div>
-
-              <span
-                className={`shrink-0 p-2.5 rounded-xl text-base md:text-lg ${card.iconeBox}`}
-              >
-                {card.icone}
-              </span>
-            </div>
-
-            <div className="mb-3">
-              <p className="text-2xl md:text-3xl font-bold text-gray-800 leading-tight break-words">
-                {card.valor}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                {card.descricao}
-              </p>
-
-              <span className="text-blue-600 font-bold text-xs md:text-sm opacity-80 group-hover:translate-x-1 transition">
-                Abrir →
-              </span>
-            </div>
-          </button>
+          />
         ))}
       </div>
 
@@ -1071,71 +359,45 @@ function Dashboard({ usuarioLogado }) {
       </h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <button
+        <QuickActionCard
+          titulo="Registrar Entrada"
+          descricao="Repor estoque / Compras"
+          icone="➕"
           onClick={() => setModalAberto("entrada")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Registrar Entrada
-            </span>
-            <span className="text-xs text-emerald-100 group-hover:text-white transition">
-              Repor estoque / Compras
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">➕</span>
-          </div>
-        </button>
+          className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1"
+          descricaoClassName="text-emerald-100 group-hover:text-white"
+          iconBoxClassName="bg-white/10 group-hover:bg-white/20"
+        />
 
-        <button
+        <QuickActionCard
+          titulo="Realizar Entrega"
+          descricao="Entregar EPI ao funcionário"
+          icone="👷"
           onClick={() => setModalAberto("entrega")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Realizar Entrega
-            </span>
-            <span className="text-xs text-blue-100 group-hover:text-white transition">
-              Entregar EPI ao funcionário
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">👷</span>
-          </div>
-        </button>
+          className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1"
+          descricaoClassName="text-blue-100 group-hover:text-white"
+          iconBoxClassName="bg-white/10 group-hover:bg-white/20"
+        />
 
-        <button
+        <QuickActionCard
+          titulo="Devolução / Baixa"
+          descricao="Registrar devolução, dano ou descarte"
+          icone="📉"
           onClick={() => setModalAberto("baixa")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-rose-600 to-rose-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Devolução / Baixa
-            </span>
-            <span className="text-xs text-rose-100 group-hover:text-white transition">
-              Registrar devolução, dano ou descarte
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">📉</span>
-          </div>
-        </button>
+          className="bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1"
+          descricaoClassName="text-rose-100 group-hover:text-white"
+          iconBoxClassName="bg-white/10 group-hover:bg-white/20"
+        />
 
-        <button
+        <QuickActionCard
+          titulo="Consultar Estoque Rápido"
+          descricao="Pesquisar por CA, nome, fabricante ou lote"
+          icone="🔍"
           onClick={() => setModalAberto("busca")}
-          className="sm:col-span-2 lg:col-span-3 group flex items-center justify-center gap-3 p-4 md:p-5 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300"
-        >
-          <span className="text-xl md:text-2xl">🔍</span>
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Consultar Estoque Rápido
-            </span>
-            <span className="text-xs text-gray-400 group-hover:text-blue-400 transition">
-              Pesquisar por CA, nome, fabricante ou lote
-            </span>
-          </div>
-        </button>
+          fullWidth
+          className="bg-white border-2 border-dashed border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50"
+          descricaoClassName="text-gray-400 group-hover:text-blue-400"
+        />
       </div>
 
       <ModalDetalhesDashboard
@@ -1149,33 +411,15 @@ function Dashboard({ usuarioLogado }) {
       />
 
       {modalAberto === "entrada" && (
-        <ModalEntrada
-          onClose={fecharModal}
-          onSalvar={async () => {
-            await carregarResumo();
-            fecharModal();
-          }}
-        />
+        <ModalEntrada onClose={fecharModal} onSalvar={aoSalvarModal} />
       )}
 
       {modalAberto === "entrega" && (
-        <ModalEntrega
-          onClose={fecharModal}
-          onSalvar={async () => {
-            await carregarResumo();
-            fecharModal();
-          }}
-        />
+        <ModalEntrega onClose={fecharModal} onSalvar={aoSalvarModal} />
       )}
 
       {modalAberto === "baixa" && (
-        <ModalBaixa
-          onClose={fecharModal}
-          onSalvar={async () => {
-            await carregarResumo();
-            fecharModal();
-          }}
-        />
+        <ModalBaixa onClose={fecharModal} onSalvar={aoSalvarModal} />
       )}
 
       {modalAberto === "busca" && <ModalBusca onClose={fecharModal} />}

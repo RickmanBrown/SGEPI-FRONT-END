@@ -1,150 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../services/api";
 import { temPermissao } from "../utils/permissoes";
-
-const mockFornecedores = [
-  {
-    id: 1,
-    razao_social: "3M do Brasil Ltda",
-    nome_fantasia: "3M",
-    cnpj: "45.985.371/0001-08",
-    inscricao_estadual: "123.456.789.000",
-  },
-  {
-    id: 2,
-    razao_social: "Bracol Calçados de Segurança Ltda",
-    nome_fantasia: "Bracol",
-    cnpj: "12.345.678/0001-90",
-    inscricao_estadual: "987.654.321.000",
-  },
-  {
-    id: 3,
-    razao_social: "Kalipso Equipamentos Individuais Ltda",
-    nome_fantasia: "Kalipso",
-    cnpj: "98.765.432/0001-55",
-    inscricao_estadual: "456.123.789.000",
-  },
-];
-
-function extrairLista(resp, fallback = []) {
-  const dados = resp?.data ?? resp ?? fallback;
-  return Array.isArray(dados) ? dados : fallback;
-}
-
-async function buscarPrimeiraLista(rotas, fallback = []) {
-  for (const rota of rotas) {
-    try {
-      const resp = await api.get(rota);
-      const lista = extrairLista(resp, fallback);
-      if (Array.isArray(lista)) return lista;
-    } catch (erro) {
-      // tenta próxima rota
-    }
-  }
-  return fallback;
-}
-
-function normalizarFornecedor(item) {
-  return {
-    id: Number(item?.id ?? item?.ID ?? Date.now()),
-    razao_social:
-      item?.razao_social ??
-      item?.razaoSocial ??
-      item?.razao ??
-      item?.nome ??
-      "",
-    nome_fantasia:
-      item?.nome_fantasia ??
-      item?.nomeFantasia ??
-      item?.fantasia ??
-      "",
-    cnpj: item?.cnpj ?? "",
-    inscricao_estadual:
-      item?.inscricao_estadual ??
-      item?.inscricaoEstadual ??
-      item?.ie ??
-      "",
-  };
-}
-
-function ModalDetalhesFornecedor({ aberto, fornecedor, onClose }) {
-  if (!aberto || !fornecedor) return null;
-
-  return (
-    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-fade-in">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold">Detalhes do fornecedor</h3>
-              <p className="text-sm text-slate-200 mt-1">
-                Informações completas do cadastro.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="bg-white/10 hover:bg-white/20 transition rounded-lg px-3 py-2 text-sm font-bold"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <span className="text-[11px] uppercase tracking-wide text-slate-500 font-bold block mb-1">
-              Razão social
-            </span>
-            <strong className="text-slate-800">
-              {fornecedor.razao_social || "-"}
-            </strong>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <span className="text-[11px] uppercase tracking-wide text-slate-500 font-bold block mb-1">
-                Nome fantasia
-              </span>
-              <strong className="text-slate-800">
-                {fornecedor.nome_fantasia || "-"}
-              </strong>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <span className="text-[11px] uppercase tracking-wide text-slate-500 font-bold block mb-1">
-                CNPJ
-              </span>
-              <strong className="text-slate-800 font-mono">
-                {fornecedor.cnpj || "-"}
-              </strong>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-              <span className="text-[11px] uppercase tracking-wide text-slate-500 font-bold block mb-1">
-                Inscrição estadual
-              </span>
-              <strong className="text-slate-800">
-                {fornecedor.inscricao_estadual || "-"}
-              </strong>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-900 transition"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { listarFornecedores } from "../services/fornecedorService";
+import { normalizarFornecedor } from "../utils/fornecedorNormalizer";
+import ModalCriarFornecedor from "../components/modals/ModalCriarFornecedor";
+import ModalDetalhesFornecedor from "../components/modals/ModalDetalhesFornecedor";
 
 function Fornecedores({ usuarioLogado }) {
   const [fornecedores, setFornecedores] = useState([]);
@@ -153,33 +12,33 @@ function Fornecedores({ usuarioLogado }) {
   const [carregando, setCarregando] = useState(true);
   const [erroTela, setErroTela] = useState("");
   const [fornecedorDetalhe, setFornecedorDetalhe] = useState(null);
+  const [modalCriarAberto, setModalCriarAberto] = useState(false);
 
   const itensPorPagina = 6;
 
-  const podeVisualizar = temPermissao(usuarioLogado, "visualizar_fornecedores");
+  const podeVisualizar = temPermissao(
+    usuarioLogado,
+    "visualizar_fornecedores"
+  );
+
+  const carregarFornecedores = async () => {
+    setCarregando(true);
+    setErroTela("");
+
+    try {
+      const lista = await listarFornecedores();
+      setFornecedores(lista.map(normalizarFornecedor));
+    } catch (erro) {
+      setErroTela(
+        erro?.message || "Não foi possível carregar a lista de fornecedores."
+      );
+      setFornecedores([]);
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   useEffect(() => {
-    async function carregarFornecedores() {
-      setCarregando(true);
-      setErroTela("");
-
-      try {
-        const lista = await buscarPrimeiraLista(
-          ["/fornecedores", "/fornecedor"],
-          mockFornecedores
-        );
-
-        setFornecedores(lista.map(normalizarFornecedor));
-      } catch (erro) {
-        setErroTela(
-          erro?.message || "Não foi possível carregar a lista de fornecedores."
-        );
-        setFornecedores(mockFornecedores.map(normalizarFornecedor));
-      } finally {
-        setCarregando(false);
-      }
-    }
-
     carregarFornecedores();
   }, []);
 
@@ -207,7 +66,10 @@ function Fornecedores({ usuarioLogado }) {
       1,
       Math.ceil(fornecedoresFiltrados.length / itensPorPagina)
     );
-    if (paginaAtual > total) setPaginaAtual(total);
+
+    if (paginaAtual > total) {
+      setPaginaAtual(total);
+    }
   }, [paginaAtual, fornecedoresFiltrados.length]);
 
   const totalPaginas = Math.max(
@@ -263,6 +125,13 @@ function Fornecedores({ usuarioLogado }) {
               Visualize os fornecedores cadastrados no sistema.
             </p>
           </div>
+
+          <button
+            onClick={() => setModalCriarAberto(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition shadow-md"
+          >
+            + Novo Fornecedor
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -457,6 +326,12 @@ function Fornecedores({ usuarioLogado }) {
         aberto={!!fornecedorDetalhe}
         fornecedor={fornecedorDetalhe}
         onClose={() => setFornecedorDetalhe(null)}
+      />
+
+      <ModalCriarFornecedor
+        aberto={modalCriarAberto}
+        onClose={() => setModalCriarAberto(false)}
+        onSucesso={carregarFornecedores}
       />
     </>
   );

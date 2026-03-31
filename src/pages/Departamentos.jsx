@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../services/api";
 import { temPermissao } from "../utils/permissoes";
 
@@ -43,12 +44,19 @@ function normalizarFuncao(item) {
   };
 }
 
-function Departamentos({ usuarioLogado }) {
-  const [departamentos, setDepartamentos] = useState([]);
-  const [funcoes, setFuncoes] = useState([]);
-  const [erroTela, setErroTela] = useState("");
-  const [carregandoTela, setCarregandoTela] = useState(true);
+async function carregarDepartamentosEFuncoes() {
+  const [listaDepartamentos, listaFuncoes] = await Promise.all([
+    buscarPrimeiraLista(["/departamentos", "/departamento"], []),
+    buscarPrimeiraLista(["/funcoes", "/funcao", "/cargos", "/cargo"], []),
+  ]);
 
+  return {
+    departamentos: listaDepartamentos.map(normalizarDepartamento),
+    funcoes: listaFuncoes.map(normalizarFuncao),
+  };
+}
+
+function Departamentos({ usuarioLogado }) {
   const [formDepartamento, setFormDepartamento] = useState({
     nome: "",
   });
@@ -79,34 +87,22 @@ function Departamentos({ usuarioLogado }) {
 
   const isAdmin = podeCadastrarDepartamento || podeExcluirDepartamento;
 
-  const carregarDados = async () => {
-    setCarregandoTela(true);
-    setErroTela("");
+  const {
+    data,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["departamentos", "funcoes"],
+    queryFn: carregarDepartamentosEFuncoes,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+  });
 
-    try {
-      const [listaDepartamentos, listaFuncoes] = await Promise.all([
-        buscarPrimeiraLista(["/departamentos", "/departamento"], []),
-        buscarPrimeiraLista(["/funcoes", "/funcao", "/cargos", "/cargo"], []),
-      ]);
-
-      setDepartamentos(listaDepartamentos.map(normalizarDepartamento));
-      setFuncoes(listaFuncoes.map(normalizarFuncao));
-    } catch (erro) {
-      console.error("Erro ao carregar departamentos/funções:", erro);
-      setErroTela(
-        erro?.message ||
-          "Não foi possível carregar os departamentos e funções."
-      );
-      setDepartamentos([]);
-      setFuncoes([]);
-    } finally {
-      setCarregandoTela(false);
-    }
-  };
-
-  useEffect(() => {
-    carregarDados();
-  }, []);
+  const departamentos = data?.departamentos ?? [];
+  const funcoes = data?.funcoes ?? [];
 
   const departamentosComFuncoes = useMemo(() => {
     return [...departamentos]
@@ -152,22 +148,31 @@ function Departamentos({ usuarioLogado }) {
     const payload = { nome };
 
     try {
+      let sucesso = false;
+
       try {
         await api.post("/cadastro-departamento", payload);
+        sucesso = true;
       } catch (erro) {
         try {
           await api.post("/departamento", payload);
+          sucesso = true;
         } catch (erro2) {
           try {
             await api.post("/departamentos", payload);
+            sucesso = true;
           } catch (erro3) {
-            // fallback local
+            // continua para validar falha real
           }
         }
       }
 
+      if (!sucesso) {
+        throw new Error("Erro ao cadastrar departamento.");
+      }
+
       setFormDepartamento({ nome: "" });
-      await carregarDados();
+      await refetch();
     } catch (erro) {
       alert(erro?.message || "Erro ao cadastrar departamento.");
     } finally {
@@ -215,26 +220,37 @@ function Departamentos({ usuarioLogado }) {
     };
 
     try {
+      let sucesso = false;
+
       try {
         await api.post("/cadastro-funcao", payload);
+        sucesso = true;
       } catch (erro) {
         try {
           await api.post("/funcao", payload);
+          sucesso = true;
         } catch (erro2) {
           try {
             await api.post("/funcoes", payload);
+            sucesso = true;
           } catch (erro3) {
             try {
               await api.post("/cargo", payload);
+              sucesso = true;
             } catch (erro4) {
               try {
                 await api.post("/cargos", payload);
+                sucesso = true;
               } catch (erro5) {
-                // fallback local
+                // continua para validar falha real
               }
             }
           }
         }
+      }
+
+      if (!sucesso) {
+        throw new Error("Erro ao cadastrar função.");
       }
 
       setFormFuncao((prev) => ({
@@ -242,7 +258,7 @@ function Departamentos({ usuarioLogado }) {
         nome: "",
       }));
 
-      await carregarDados();
+      await refetch();
     } catch (erro) {
       alert(erro?.message || "Erro ao cadastrar função.");
     } finally {
@@ -263,13 +279,25 @@ function Departamentos({ usuarioLogado }) {
     if (!confirmar) return;
 
     try {
+      let sucesso = false;
+
       try {
         await api.delete(`/departamento/${id}`);
+        sucesso = true;
       } catch (erro) {
-        await api.delete(`/departamentos/${id}`);
+        try {
+          await api.delete(`/departamentos/${id}`);
+          sucesso = true;
+        } catch (erro2) {
+          // continua para validar falha real
+        }
       }
 
-      await carregarDados();
+      if (!sucesso) {
+        throw new Error("Erro ao excluir departamento.");
+      }
+
+      await refetch();
     } catch (erro) {
       alert(erro?.message || "Erro ao excluir departamento.");
     }
@@ -282,21 +310,35 @@ function Departamentos({ usuarioLogado }) {
     }
 
     try {
+      let sucesso = false;
+
       try {
         await api.delete(`/funcao/${funcaoId}`);
+        sucesso = true;
       } catch (erro) {
         try {
           await api.delete(`/funcoes/${funcaoId}`);
+          sucesso = true;
         } catch (erro2) {
           try {
             await api.delete(`/cargo/${funcaoId}`);
+            sucesso = true;
           } catch (erro3) {
-            await api.delete(`/cargos/${funcaoId}`);
+            try {
+              await api.delete(`/cargos/${funcaoId}`);
+              sucesso = true;
+            } catch (erro4) {
+              // continua para validar falha real
+            }
           }
         }
       }
 
-      await carregarDados();
+      if (!sucesso) {
+        throw new Error("Erro ao excluir função.");
+      }
+
+      await refetch();
     } catch (erro) {
       alert(erro?.message || "Erro ao excluir função.");
     }
@@ -361,11 +403,17 @@ function Departamentos({ usuarioLogado }) {
             </div>
           )}
         </div>
+
+        {isFetching && !isLoading && (
+          <div className="mt-4 text-xs text-slate-500">
+            Atualizando dados...
+          </div>
+        )}
       </div>
 
-      {erroTela && (
+      {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-          {erroTela}
+          {error?.message || "Não foi possível carregar os departamentos e funções."}
         </div>
       )}
 
@@ -474,7 +522,7 @@ function Departamentos({ usuarioLogado }) {
           </h3>
         </div>
 
-        {carregandoTela ? (
+        {isLoading ? (
           <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">
             Carregando departamentos...
           </div>

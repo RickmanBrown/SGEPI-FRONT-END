@@ -344,21 +344,23 @@ function ModalDetalhesDashboard({
   if (!aberto) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-3 md:p-4">
       <div className="w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200 animate-fade-in">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-5 md:px-6 py-4 md:py-5">
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-4 md:px-5 py-3 md:py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-xl shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg shrink-0">
                   {icon}
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-lg md:text-xl font-bold truncate">
+                  <h3 className="text-base md:text-lg font-bold truncate">
                     {titulo}
                   </h3>
-                  <p className="text-sm text-slate-300 mt-1">{subtitulo}</p>
+                  <p className="text-xs md:text-sm text-slate-300 mt-1">
+                    {subtitulo}
+                  </p>
                 </div>
               </div>
             </div>
@@ -366,28 +368,28 @@ function ModalDetalhesDashboard({
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition font-bold"
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition font-bold"
             >
               ✕
             </button>
           </div>
         </div>
 
-        <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(90vh-96px)]">
+        <div className="p-4 md:p-5 overflow-y-auto max-h-[calc(90vh-78px)]">
           {dados.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500">
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500">
               Nenhum registro encontrado.
             </div>
           ) : (
             <>
               <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-100 text-gray-600 text-sm uppercase">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                     <tr>
                       {colunas.map((coluna) => (
                         <th
                           key={coluna.key}
-                          className="p-4 font-semibold whitespace-nowrap"
+                          className="p-3 font-semibold whitespace-nowrap"
                         >
                           {coluna.label}
                         </th>
@@ -404,7 +406,7 @@ function ModalDetalhesDashboard({
                         {colunas.map((coluna) => (
                           <td
                             key={`${coluna.key}-${item.id ?? index}`}
-                            className="p-4 text-sm text-gray-700 align-top"
+                            className="p-3 text-sm text-gray-700 align-top"
                           >
                             {typeof coluna.render === "function"
                               ? coluna.render(item)
@@ -417,11 +419,11 @@ function ModalDetalhesDashboard({
                 </table>
               </div>
 
-              <div className="md:hidden space-y-3">
+              <div className="md:hidden space-y-2.5">
                 {dados.map((item, index) => (
                   <div
                     key={item.id ?? index}
-                    className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4"
+                    className="rounded-2xl border border-gray-200 bg-white shadow-sm p-3"
                   >
                     <div className="space-y-2">
                       {colunas.map((coluna) => (
@@ -429,7 +431,7 @@ function ModalDetalhesDashboard({
                           key={`${coluna.key}-${item.id ?? index}`}
                           className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-b-0 last:pb-0"
                         >
-                          <span className="text-[11px] uppercase font-bold tracking-wide text-gray-400">
+                          <span className="text-[10px] uppercase font-bold tracking-wide text-gray-400">
                             {coluna.label}
                           </span>
                           <div className="text-sm text-gray-700">
@@ -447,7 +449,7 @@ function ModalDetalhesDashboard({
           )}
 
           {tipo === "lista" && dados.length > 0 && (
-            <div className="mt-4 text-xs text-gray-400">
+            <div className="mt-3 text-xs text-gray-400">
               Total de registros exibidos: <b>{dados.length}</b>
             </div>
           )}
@@ -906,48 +908,48 @@ function Dashboard({ usuarioLogado }) {
       id: "estoque",
       titulo: "Total em Estoque",
       valor: carregandoResumo ? "--" : resumo.totalItens,
-      descricao: "Clique para ver item por tamanho",
+      descricao: "Ver item por tamanho",
       icone: "📦",
       iconeBox: "bg-blue-50 text-blue-600",
       ring: "hover:border-blue-200 hover:bg-blue-50/40",
-      badge: "Estoque atual detalhado",
+      badge: "Estoque",
     },
     {
       id: "entregas",
       titulo: "Entregas Hoje",
       valor: carregandoResumo ? "--" : resumo.entregasHoje,
-      descricao: "Clique para ver o que foi entregue hoje",
+      descricao: "Ver entregas do dia",
       icone: "🚀",
       iconeBox: "bg-purple-50 text-purple-600",
       ring: "hover:border-purple-200 hover:bg-purple-50/40",
-      badge: "Movimento do dia",
+      badge: "Movimento",
     },
     {
       id: "alertas",
       titulo: "Alertas",
       valor: carregandoResumo ? "--" : resumo.alertas,
-      descricao: "Clique para ver os itens acabando",
+      descricao: "Ver itens acabando",
       icone: "⚠️",
       iconeBox: "bg-orange-50 text-orange-600",
       ring: "hover:border-orange-200 hover:bg-orange-50/40",
-      badge: "Estoque baixo",
+      badge: "Atenção",
     },
     {
       id: "valor",
       titulo: "Valor em Estoque",
       valor: carregandoResumo ? "--" : formatarMoeda(resumo.valorTotal),
-      descricao: "Clique para ver item, tamanho, quantidade e valor",
+      descricao: "Ver valores",
       icone: "💲",
       iconeBox: "bg-green-50 text-green-600",
       ring: "hover:border-green-200 hover:bg-green-50/40",
-      badge: "Financeiro do estoque",
+      badge: "Financeiro",
     },
   ];
 
   if (!podeVisualizarDashboard) {
     return (
-      <div className="animate-fade-in">
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100">
+      <div className="h-full flex items-center justify-center animate-fade-in">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 w-full">
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-amber-700">
             Você não tem permissão para visualizar o dashboard.
           </div>
@@ -957,185 +959,200 @@ function Dashboard({ usuarioLogado }) {
   }
 
   return (
-    <div className="animate-fade-in pb-20 md:pb-0">
-      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
-            Olá, <span className="text-blue-600">{nomeExibicao}</span> 👋
-          </h2>
-          <p className="text-sm md:text-base text-gray-500 mt-1">
-            Aqui está o resumo geral do sistema hoje.
-          </p>
-        </div>
+    <div className="animate-fade-in h-[calc(100vh-88px)] overflow-hidden">
+      <div className="h-full grid grid-rows-[auto_auto_1fr_auto] gap-3 md:gap-4">
+        <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 tracking-tight">
+              Olá, <span className="text-blue-600">{nomeExibicao}</span> 👋
+            </h2>
+            <p className="text-xs md:text-sm text-gray-500 mt-1">
+              Aqui está o resumo geral do sistema hoje.
+            </p>
+          </div>
 
-        <div className="hidden md:block text-right">
-          <p className="text-xs font-bold text-gray-400 uppercase">
-            Status do Sistema
-          </p>
-          <div className="flex items-center gap-2 justify-end">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            <span className="text-sm font-semibold text-gray-700">
-              {carregandoResumo ? "Carregando..." : "Operacional"}
-            </span>
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-bold text-gray-400 uppercase">
+              Status do Sistema
+            </p>
+            <div className="flex items-center gap-2 justify-end">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              <span className="text-sm font-semibold text-gray-700">
+                {carregandoResumo ? "Carregando..." : "Operacional"}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mb-8 ml-2 md:ml-1 flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4">
-        <div>
-          <h3 className="text-lg md:text-xl font-bold text-gray-800">
-            Visão principal do dashboard
-          </h3>
-          <p className="text-sm text-gray-500">
-            Clique em qualquer card para abrir os detalhes correspondentes.
-          </p>
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base md:text-lg font-bold text-gray-800">
+              Visão principal do dashboard
+            </h3>
+            <p className="text-xs md:text-sm text-gray-500">
+              Clique em qualquer card para abrir os detalhes.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 mb-8 md:mb-10">
-        {cardsPrincipais.map((card) => (
-          <button
-            key={card.id}
-            type="button"
-            onClick={() => setDetalheCardAberto(card.id)}
-            className={`group text-left bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer ${card.ring}`}
-          >
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="min-w-0">
-                <span className="inline-flex text-[10px] md:text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-2">
-                  {card.badge}
-                </span>
+        <div className="grid grid-cols-1 xl:grid-cols-[1.65fr_0.95fr] gap-3 md:gap-4 min-h-0">
+          <div className="min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 content-start">
+            {cardsPrincipais.map((card) => (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => setDetalheCardAberto(card.id)}
+                className={`group text-left bg-white p-4 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer min-h-[138px] md:min-h-[148px] ${card.ring}`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <span className="inline-flex text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">
+                      {card.badge}
+                    </span>
 
-                <h3 className="text-gray-600 text-sm md:text-sm font-bold uppercase leading-tight">
-                  {card.titulo}
-                </h3>
+                    <h3 className="text-gray-600 text-xs md:text-sm font-bold uppercase leading-tight">
+                      {card.titulo}
+                    </h3>
+                  </div>
+
+                  <span
+                    className={`shrink-0 p-2.5 rounded-xl text-base ${card.iconeBox}`}
+                  >
+                    {card.icone}
+                  </span>
+                </div>
+
+                <div className="mb-2">
+                  <p className="text-xl md:text-2xl font-bold text-gray-800 leading-tight break-words">
+                    {card.valor}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    {card.descricao}
+                  </p>
+
+                  <span className="text-blue-600 font-bold text-xs opacity-80 group-hover:translate-x-1 transition">
+                    Abrir →
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+            <h3 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
+              📌 Resumo rápido
+            </h3>
+
+            <div className="grid grid-cols-1 gap-3 flex-1">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">EPIs cadastrados</p>
+                  <p className="text-lg font-bold text-gray-800">
+                    {carregandoResumo ? "--" : epis.length}
+                  </p>
+                </div>
+                <span className="text-xl">🦺</span>
               </div>
 
-              <span
-                className={`shrink-0 p-2.5 rounded-xl text-base md:text-lg ${card.iconeBox}`}
-              >
-                {card.icone}
-              </span>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Entradas registradas</p>
+                  <p className="text-lg font-bold text-gray-800">
+                    {carregandoResumo ? "--" : entradas.length}
+                  </p>
+                </div>
+                <span className="text-xl">📥</span>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Devoluções hoje</p>
+                  <p className="text-lg font-bold text-gray-800">
+                    {carregandoResumo ? "--" : resumo.devolucoesHoje}
+                  </p>
+                </div>
+                <span className="text-xl">📉</span>
+              </div>
             </div>
-
-            <div className="mb-3">
-              <p className="text-2xl md:text-3xl font-bold text-gray-800 leading-tight break-words">
-                {card.valor}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                {card.descricao}
-              </p>
-
-              <span className="text-blue-600 font-bold text-xs md:text-sm opacity-80 group-hover:translate-x-1 transition">
-                Abrir →
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 mb-8">
-        <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-          📌 Resumo rápido
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-gray-500">EPIs cadastrados</p>
-            <p className="text-lg font-bold text-gray-800">
-              {carregandoResumo ? "--" : epis.length}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-gray-500">Entradas registradas</p>
-            <p className="text-lg font-bold text-gray-800">
-              {carregandoResumo ? "--" : entradas.length}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-gray-500">Devoluções hoje</p>
-            <p className="text-lg font-bold text-gray-800">
-              {carregandoResumo ? "--" : resumo.devolucoesHoje}
-            </p>
           </div>
         </div>
-      </div>
 
-      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-        ⚡ Ações Rápidas
-      </h3>
+        <div>
+          <h3 className="text-base md:text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+            ⚡ Ações Rápidas
+          </h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <button
-          onClick={() => setModalAberto("entrada")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Registrar Entrada
-            </span>
-            <span className="text-xs text-emerald-100 group-hover:text-white transition">
-              Repor estoque / Compras
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">➕</span>
-          </div>
-        </button>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              onClick={() => setModalAberto("entrada")}
+              className="group flex items-center justify-between p-3.5 md:p-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
+              <div className="flex flex-col items-start text-left min-w-0">
+                <span className="font-bold text-sm md:text-base truncate">
+                  Entrada
+                </span>
+                <span className="text-[11px] text-emerald-100 group-hover:text-white transition">
+                  Repor estoque
+                </span>
+              </div>
+              <div className="bg-white/10 p-2 rounded-lg group-hover:bg-white/20 transition">
+                <span className="text-lg">➕</span>
+              </div>
+            </button>
 
-        <button
-          onClick={() => setModalAberto("entrega")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Realizar Entrega
-            </span>
-            <span className="text-xs text-blue-100 group-hover:text-white transition">
-              Entregar EPI ao funcionário
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">👷</span>
-          </div>
-        </button>
+            <button
+              onClick={() => setModalAberto("entrega")}
+              className="group flex items-center justify-between p-3.5 md:p-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
+              <div className="flex flex-col items-start text-left min-w-0">
+                <span className="font-bold text-sm md:text-base truncate">
+                  Entrega
+                </span>
+                <span className="text-[11px] text-blue-100 group-hover:text-white transition">
+                  Entregar EPI
+                </span>
+              </div>
+              <div className="bg-white/10 p-2 rounded-lg group-hover:bg-white/20 transition">
+                <span className="text-lg">👷</span>
+              </div>
+            </button>
 
-        <button
-          onClick={() => setModalAberto("baixa")}
-          className="group flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-rose-600 to-rose-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-        >
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Devolução / Baixa
-            </span>
-            <span className="text-xs text-rose-100 group-hover:text-white transition">
-              Registrar devolução, dano ou descarte
-            </span>
-          </div>
-          <div className="bg-white/10 p-2 md:p-3 rounded-lg group-hover:bg-white/20 transition">
-            <span className="text-xl md:text-2xl">📉</span>
-          </div>
-        </button>
+            <button
+              onClick={() => setModalAberto("baixa")}
+              className="group flex items-center justify-between p-3.5 md:p-4 bg-gradient-to-r from-rose-600 to-rose-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
+              <div className="flex flex-col items-start text-left min-w-0">
+                <span className="font-bold text-sm md:text-base truncate">
+                  Baixa
+                </span>
+                <span className="text-[11px] text-rose-100 group-hover:text-white transition">
+                  Devolução
+                </span>
+              </div>
+              <div className="bg-white/10 p-2 rounded-lg group-hover:bg-white/20 transition">
+                <span className="text-lg">📉</span>
+              </div>
+            </button>
 
-        <button
-          onClick={() => setModalAberto("busca")}
-          className="sm:col-span-2 lg:col-span-3 group flex items-center justify-center gap-3 p-4 md:p-5 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300"
-        >
-          <span className="text-xl md:text-2xl">🔍</span>
-          <div className="flex flex-col items-start text-left">
-            <span className="font-bold text-base md:text-lg">
-              Consultar Estoque Rápido
-            </span>
-            <span className="text-xs text-gray-400 group-hover:text-blue-400 transition">
-              Pesquisar por CA, nome, fabricante ou lote
-            </span>
+            <button
+              onClick={() => setModalAberto("busca")}
+              className="group flex items-center justify-between p-3.5 md:p-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300"
+            >
+              <div className="flex flex-col items-start text-left min-w-0">
+                <span className="font-bold text-sm md:text-base truncate">
+                  Busca
+                </span>
+                <span className="text-[11px] text-gray-400 group-hover:text-blue-400 transition">
+                  Consultar estoque
+                </span>
+              </div>
+              <span className="text-lg">🔍</span>
+            </button>
           </div>
-        </button>
+        </div>
       </div>
 
       <ModalDetalhesDashboard
